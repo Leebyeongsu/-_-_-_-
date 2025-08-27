@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR 코드 생성기 - 구포현대아파트 통신 환경 개선 신청서</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            text-align: center;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            padding: 30px 20px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .content {
+            padding: 40px 20px;
+        }
+
+        .url-section {
+            margin-bottom: 30px;
+        }
+
+        .url-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        .generate-btn {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .generate-btn:hover {
+            background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .qr-section {
+            margin: 30px 0;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-placeholder {
+            color: #666;
+            font-size: 18px;
+        }
+
+        #qrcode {
+            margin: 20px 0;
+        }
+
+        .download-section {
+            margin-top: 20px;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .download-btn:hover {
+            background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+        }
+
+        .share-btn {
+            background: linear-gradient(135deg, #FEE500 0%, #FFCD00 100%);
+            color: #3C1E1E;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .share-btn:hover {
+            background: linear-gradient(135deg, #FFCD00 0%, #FFB300 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 205, 0, 0.3);
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .instructions h3 {
+            color: #4CAF50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .instructions ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .instructions li {
+            padding: 8px 0;
+            position: relative;
+            padding-left: 25px;
+        }
+
+        .instructions li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 1.6rem;
+            }
+            
+            .content {
+                padding: 30px 15px;
+            }
+            
+            .url-input {
+                font-size: 16px;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .error-message {
+            color: #f44336;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 QR 코드 생성기</h1>
+            <p>구포현대아파트 통신 환경 개선 신청서 링크용 QR 코드를 생성하세요</p>
+        </div>
+        
+        <div class="content">
+            <div class="url-section">
+                <input type="url" id="urlInput" class="url-input" placeholder="신청서 URL을 입력하세요 (예: https://example.com/index.html)" value="">
+                <br>
+                <button id="generateBtn" class="generate-btn">QR 코드 생성</button>
+                <div id="errorMessage" class="error-message hidden"></div>
+            </div>
+            
+            <div class="qr-section">
+                <div id="qrPlaceholder" class="qr-placeholder">
+                    QR 코드가 여기에 생성됩니다
+                </div>
+                <div id="qrcode"></div>
+                
+                <div id="downloadSection" class="download-section hidden">
+                    <button id="downloadPng" class="download-btn">PNG로 다운로드</button>
+                    <button id="downloadJpg" class="download-btn">JPG로 다운로드</button>
+                    <button id="shareBtn" class="share-btn">공유하기</button>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>사용 방법</h3>
+                <ul>
+                    <li>신청서 페이지의 URL을 위 입력란에 입력하세요</li>
+                    <li>'QR 코드 생성' 버튼을 클릭하여 QR 코드를 만드세요</li>
+                    <li>생성된 QR 코드를 PNG 또는 JPG 형식으로 다운로드할 수 있습니다</li>
+                    <li>QR 코드를 인쇄하거나 디지털 매체에 게시하세요</li>
+                    <li>사용자가 휴대폰으로 QR 코드를 스캔하면 신청서 페이지로 바로 이동됩니다</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentQRCodeDataURL = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlInput = document.getElementById('urlInput');
+            const generateBtn = document.getElementById('generateBtn');
+            const qrPlaceholder = document.getElementById('qrPlaceholder');
+            const qrcodeDiv = document.getElementById('qrcode');
+            const downloadSection = document.getElementById('downloadSection');
+            const errorMessage = document.getElementById('errorMessage');
+            const downloadPng = document.getElementById('downloadPng');
+            const downloadJpg = document.getElementById('downloadJpg');
+            const shareBtn = document.getElementById('shareBtn');
+
+            // 현재 페이지의 기본 URL 설정 (index.html)
+            const currentUrl = window.location.href.replace('qr.html', 'index.html');
+            urlInput.value = currentUrl;
+
+            generateBtn.addEventListener('click', generateQRCode);
+            urlInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    generateQRCode();
+                }
+            });
+
+            downloadPng.addEventListener('click', () => downloadQRCode('png'));
+            downloadJpg.addEventListener('click', () => downloadQRCode('jpg'));
+            shareBtn.addEventListener('click', shareQRCode);
+
+            function generateQRCode() {
+                const url = urlInput.value.trim();
+                
+                if (!url) {
+                    showError('URL을 입력해주세요.');
+                    return;
+                }
+
+                if (!isValidUrl(url)) {
+                    showError('올바른 URL 형식을 입력해주세요.');
+                    return;
+                }
+
+                hideError();
+                generateBtn.textContent = '생성중...';
+                generateBtn.disabled = true;
+
+                // 기존 QR 코드 제거
+                qrcodeDiv.innerHTML = '';
+                qrPlaceholder.style.display = 'none';
+                downloadSection.classList.add('hidden');
+
+                // QR 코드 생성
+                QRCode.toCanvas(url, {
+                    width: 256,
+                    height: 256,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                }, function (error, canvas) {
+                    generateBtn.textContent = 'QR 코드 생성';
+                    generateBtn.disabled = false;
+
+                    if (error) {
+                        console.error(error);
+                        showError('QR 코드 생성 중 오류가 발생했습니다.');
+                        qrPlaceholder.style.display = 'block';
+                        return;
+                    }
+
+                    // 생성된 캔버스를 div에 추가
+                    qrcodeDiv.appendChild(canvas);
+                    downloadSection.classList.remove('hidden');
+                    
+                    // 다운로드용 데이터 URL 저장
+                    currentQRCodeDataURL = canvas.toDataURL();
+                });
+            }
+
+            function downloadQRCode(format) {
+                if (!currentQRCodeDataURL) {
+                    showError('먼저 QR 코드를 생성해주세요.');
+                    return;
+                }
+
+                const canvas = qrcodeDiv.querySelector('canvas');
+                let dataURL;
+
+                if (format === 'jpg') {
+                    // JPG 형식으로 변환 (흰 배경 추가)
+                    const tempCanvas = document.createElement('canvas');
+                    const ctx = tempCanvas.getContext('2d');
+                    tempCanvas.width = canvas.width;
+                    tempCanvas.height = canvas.height;
+                    
+                    // 흰 배경 그리기
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    // QR 코드 그리기
+                    ctx.drawImage(canvas, 0, 0);
+                    
+                    dataURL = tempCanvas.toDataURL('image/jpeg', 0.9);
+                } else {
+                    dataURL = currentQRCodeDataURL;
+                }
+
+                // 다운로드 실행
+                const link = document.createElement('a');
+                link.download = `qr-code-${Date.now()}.${format}`;
+                link.href = dataURL;
+                link.click();
+            }
+
+            function shareQRCode() {
+                if (!currentQRCodeDataURL) {
+                    showError('먼저 QR 코드를 생성해주세요.');
+                    return;
+                }
+
+                // Web Share API 지원 확인
+                if (navigator.share) {
+                    // 데이터 URL을 Blob으로 변환
+                    fetch(currentQRCodeDataURL)
+                        .then(res => res.blob())
+                        .then(blob => {
+                            const file = new File([blob], 'qr-code.png', { type: 'image/png' });
+                            
+                            navigator.share({
+                                title: '공사 신청서 QR 코드',
+                                text: '휴대폰으로 QR 코드를 스캔하여 공사 신청서를 작성하세요.',
+                                files: [file]
+                            }).catch(err => {
+                                console.log('공유 취소 또는 오류:', err);
+                                fallbackShare();
+                            });
+                        })
+                        .catch(() => {
+                            fallbackShare();
+                        });
+                } else {
+                    fallbackShare();
+                }
+            }
+
+            function fallbackShare() {
+                // Web Share API 미지원시 클립보드에 URL 복사
+                const url = urlInput.value.trim();
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(url).then(() => {
+                        alert('신청서 URL이 클립보드에 복사되었습니다.');
+                    }).catch(() => {
+                        alert('공유 기능을 사용할 수 없습니다. URL을 수동으로 복사해주세요: ' + url);
+                    });
+                } else {
+                    alert('공유 기능을 사용할 수 없습니다. URL을 수동으로 복사해주세요: ' + url);
+                }
+            }
+
+            function isValidUrl(string) {
+                try {
+                    new URL(string);
+                    return true;
+                } catch (_) {
+                    return false;
+                }
+            }
+
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.classList.remove('hidden');
+            }
+
+            function hideError() {
+                errorMessage.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
