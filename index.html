@@ -56,9 +56,10 @@
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="submit-btn">신청서 제출</button>
+                <button type="submit" class="submit-btn">메일로 공유</button>
+                <button type="button" class="sms-btn" onclick="showSMSModal()">문자 공유</button>
                 <button type="button" class="share-btn" onclick="shareToKakao()">카카오톡 공유</button>
-                <button type="button" class="qr-btn" onclick="generatePageQR()">📱 QR 코드 생성</button>
+                <button type="button" class="qr-btn" id="qrGenerateBtn" onclick="generatePageQR()">📱 QR 코드 생성</button>
             </div>
         </form>
 
@@ -73,6 +74,58 @@
                 <button type="button" class="download-btn" onclick="downloadQR('png')">PNG 다운로드</button>
                 <button type="button" class="download-btn" onclick="downloadQR('jpg')">JPG 다운로드</button>
                 <button type="button" class="close-btn" onclick="hideQRSection()">닫기</button>
+            </div>
+        </div>
+
+        <!-- 메일 공유 모달 -->
+        <div id="emailModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeEmailModal()">×</span>
+                <h2>📧 메일로 공유</h2>
+                <div class="email-form">
+                    <div class="form-group">
+                        <label for="recipientEmail">받는 사람 메일주소 *</label>
+                        <input type="email" id="recipientEmail" placeholder="example@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="senderName">보내는 사람 이름</label>
+                        <input type="text" id="senderName" placeholder="관리자" value="관리자">
+                    </div>
+                    <div class="form-group">
+                        <label for="emailSubject">제목</label>
+                        <input type="text" id="emailSubject" value="구포현대아파트 통신 환경 개선 신청서">
+                    </div>
+                    <div class="form-group">
+                        <label for="emailMessage">메시지</label>
+                        <textarea id="emailMessage" rows="5" placeholder="추가 메시지를 입력하세요..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="sendEmail()">메일 보내기</button>
+                        <button type="button" class="close-btn" onclick="closeEmailModal()">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 문자 공유 모달 -->
+        <div id="smsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeSMSModal()">×</span>
+                <h2>📱 문자로 공유</h2>
+                <div class="email-form">
+                    <div class="form-group">
+                        <label for="recipientPhone">받는 사람 휴대폰번호 *</label>
+                        <input type="tel" id="recipientPhone" placeholder="010-1234-5678" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="smsMessage">메시지</label>
+                        <textarea id="smsMessage" rows="6" placeholder="문자 메시지를 입력하세요..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="sendSMS()">문자 보내기</button>
+                        <button type="button" class="close-btn" onclick="closeSMSModal()">취소</button>
+                    </div>
+                </div>
             </div>
         </div>
 

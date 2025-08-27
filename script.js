@@ -9,6 +9,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const workTypeSelect = document.getElementById('workType');
     const otherWorkTypeDiv = document.getElementById('otherWorkType');
     
+    // URL 파라미터 확인하여 고객용/관리자용 모드 결정
+    const urlParams = new URLSearchParams(window.location.search);
+    const isCustomerMode = urlParams.has('customer') || urlParams.has('apply');
+    
+    // 고객용 모드인 경우 QR 생성 버튼과 카카오톡 공유 버튼, 문자 버튼 숨기고 제출 버튼 텍스트 변경
+    if (isCustomerMode) {
+        const qrBtn = document.getElementById('qrGenerateBtn');
+        const shareBtn = document.querySelector('.share-btn');
+        const smsBtn = document.querySelector('.sms-btn');
+        const submitBtn = document.querySelector('.submit-btn');
+        const qrSection = document.getElementById('qrSection');
+        
+        if (qrBtn) qrBtn.style.display = 'none';
+        if (shareBtn) shareBtn.style.display = 'none';
+        if (smsBtn) smsBtn.style.display = 'none';
+        if (qrSection) qrSection.style.display = 'none';
+        
+        // 고객용 모드에서는 제출 버튼 텍스트를 "신청서 제출"로 변경
+        if (submitBtn) submitBtn.textContent = '신청서 제출';
+        
+        // 헤더 텍스트를 고객용으로 변경
+        const headerTitle = document.querySelector('header h1');
+        const headerSubtext = document.querySelector('header p');
+        if (headerTitle) headerTitle.textContent = '📡 통신 환경 개선 신청서';
+        if (headerSubtext) headerSubtext.textContent = '아래 정보를 입력하여 신청서를 작성해주세요';
+        
+        console.log('고객용 모드로 실행됨');
+    } else {
+        console.log('관리자용 모드로 실행됨');
+    }
+    
     // 기타 공사 선택시 추가 입력란 표시
     workTypeSelect.addEventListener('change', function() {
         if (this.value === 'other') {
@@ -23,6 +54,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // 폼 제출 처리
     form.addEventListener('submit', function(e) {
         e.preventDefault();
+        
+        // 고객 모드인 경우 신청서 제출 로직 실행
+        if (isCustomerMode) {
+            processFormSubmission();
+            return;
+        }
+        
+        // 관리자 모드인 경우 메일 공유 모달 표시 (관리자가 빈 설문지 공유할 때)
+        showEmailModal();
+    });
+    
+    function processFormSubmission() {
         
         const submitBtn = form.querySelector('.submit-btn');
         const originalText = submitBtn.textContent;
@@ -69,14 +112,24 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.applicationNumber = 'APP' + Date.now().toString().slice(-8);
         formData.submittedAt = new Date().toLocaleString('ko-KR');
         
+        // 로컬 스토리지에 신청 데이터 저장 (임시 - 실제로는 서버 저장)
+        const existingData = JSON.parse(localStorage.getItem('applicationData') || '{}');
+        existingData[formData.applicationNumber] = formData;
+        localStorage.setItem('applicationData', JSON.stringify(existingData));
+        
+        // 관리자에게 자동 알림 발송 (문자 + 메일)
+        sendAutoNotificationToAdmin(formData);
+        
         // 실제 서버 제출 시뮬레이션
         setTimeout(() => {
+            const submitBtn = form.querySelector('.submit-btn');
+            const originalText = submitBtn.textContent;
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
             
             showResult();
         }, 1500);
-    });
+    }
 });
 
 function showResult() {
@@ -84,59 +137,128 @@ function showResult() {
     const resultSection = document.getElementById('result');
     const resultContent = document.getElementById('resultContent');
     
-    // 결과 내용 생성
-    const resultHTML = `
-        <div class="result-item">
-            <span class="result-label">신청번호:</span>
-            <span class="result-value">${formData.applicationNumber}</span>
-        </div>
-        <div class="result-item">
-            <span class="result-label">신청자명:</span>
-            <span class="result-value">${formData.name}</span>
-        </div>
-        <div class="result-item">
-            <span class="result-label">연락처:</span>
-            <span class="result-value">${formData.phone}</span>
-        </div>
-        ${formData.email ? `
-        <div class="result-item">
-            <span class="result-label">이메일:</span>
-            <span class="result-value">${formData.email}</span>
-        </div>
-        ` : ''}
-        <div class="result-item">
-            <span class="result-label">공사주소:</span>
-            <span class="result-value">${formData.address}</span>
-        </div>
-        <div class="result-item">
-            <span class="result-label">공사종류:</span>
-            <span class="result-value">${formData.workTypeDisplay}</span>
-        </div>
-        ${formData.budget ? `
-        <div class="result-item">
-            <span class="result-label">예상예산:</span>
-            <span class="result-value">${formData.budgetDisplay}</span>
-        </div>
-        ` : ''}
-        ${formData.startDate ? `
-        <div class="result-item">
-            <span class="result-label">희망시작일:</span>
-            <span class="result-value">${new Date(formData.startDate).toLocaleDateString('ko-KR')}</span>
-        </div>
-        ` : ''}
-        ${formData.description ? `
-        <div class="result-item">
-            <span class="result-label">요청사항:</span>
-            <span class="result-value">${formData.description}</span>
-        </div>
-        ` : ''}
-        <div class="result-item">
-            <span class="result-label">신청일시:</span>
-            <span class="result-value">${formData.submittedAt}</span>
-        </div>
-    `;
+    // URL 파라미터 확인하여 고객용/관리자용 모드 결정
+    const urlParams = new URLSearchParams(window.location.search);
+    const isCustomerMode = urlParams.has('customer') || urlParams.has('apply');
+    
+    // 고객용과 관리자용 결과 내용 구분
+    let resultHTML;
+    
+    if (isCustomerMode) {
+        // 고객용: 고객이 확인해야 할 주요 정보들 표시
+        resultHTML = `
+            <div class="result-item">
+                <span class="result-label">신청번호:</span>
+                <span class="result-value">${formData.applicationNumber}</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">공사요청:</span>
+                <span class="result-value">${formData.name}</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">연락처:</span>
+                <span class="result-value">${formData.phone}</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">현재 통신사:</span>
+                <span class="result-value">${formData.workTypeDisplay}</span>
+            </div>
+            ${formData.startDate ? `
+            <div class="result-item">
+                <span class="result-label">희망 시작일:</span>
+                <span class="result-value">${new Date(formData.startDate).toLocaleDateString('ko-KR')}</span>
+            </div>
+            ` : ''}
+            ${formData.description ? `
+            <div class="result-item">
+                <span class="result-label">요청사항:</span>
+                <span class="result-value">${formData.description}</span>
+            </div>
+            ` : ''}
+            <div class="result-item">
+                <span class="result-label">신청일시:</span>
+                <span class="result-value">${formData.submittedAt}</span>
+            </div>
+            <div class="result-item" style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;">
+                <span class="result-value" style="color: #2c5aa0; font-weight: 600;">
+                    📞 빠른 시일 내에 담당자가 연락드리겠습니다.<br>
+                    ✅ 위 신청 내용을 확인해 주세요.<br>
+                    🔍 나중에 <a href="확인.html?number=${formData.applicationNumber}" target="_blank" style="color: #2c5aa0; text-decoration: underline;">여기를 클릭</a>하시면 신청서를 다시 확인할 수 있습니다.
+                </span>
+            </div>
+        `;
+    } else {
+        // 관리자용: 모든 정보 표시 (기존과 동일)
+        resultHTML = `
+            <div class="result-item">
+                <span class="result-label">신청번호:</span>
+                <span class="result-value">${formData.applicationNumber}</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">신청자명:</span>
+                <span class="result-value">${formData.name}</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">연락처:</span>
+                <span class="result-value">${formData.phone}</span>
+            </div>
+            ${formData.email ? `
+            <div class="result-item">
+                <span class="result-label">이메일:</span>
+                <span class="result-value">${formData.email}</span>
+            </div>
+            ` : ''}
+            <div class="result-item">
+                <span class="result-label">공사주소:</span>
+                <span class="result-value">${formData.address}</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">공사종류:</span>
+                <span class="result-value">${formData.workTypeDisplay}</span>
+            </div>
+            ${formData.budget ? `
+            <div class="result-item">
+                <span class="result-label">예상예산:</span>
+                <span class="result-value">${formData.budgetDisplay}</span>
+            </div>
+            ` : ''}
+            ${formData.startDate ? `
+            <div class="result-item">
+                <span class="result-label">희망시작일:</span>
+                <span class="result-value">${new Date(formData.startDate).toLocaleDateString('ko-KR')}</span>
+            </div>
+            ` : ''}
+            ${formData.description ? `
+            <div class="result-item">
+                <span class="result-label">요청사항:</span>
+                <span class="result-value">${formData.description}</span>
+            </div>
+            ` : ''}
+            <div class="result-item">
+                <span class="result-label">신청일시:</span>
+                <span class="result-value">${formData.submittedAt}</span>
+            </div>
+        `;
+    }
     
     resultContent.innerHTML = resultHTML;
+    
+    // 결과 화면 버튼들을 고객용/관리자용으로 구분
+    const resultActions = document.querySelector('.result-actions');
+    if (resultActions) {
+        if (isCustomerMode) {
+            // 고객용: 종료 버튼만 표시
+            resultActions.innerHTML = `
+                <button type="button" class="close-btn" onclick="closeApplication()">✅ 신청 완료</button>
+            `;
+        } else {
+            // 관리자용: 기존 버튼들 유지
+            resultActions.innerHTML = `
+                <button type="button" class="share-btn" onclick="shareResultToKakao()">결과 카카오톡 공유</button>
+                <button type="button" class="new-btn" onclick="resetForm()">새 신청서 작성</button>
+            `;
+        }
+    }
     
     // 폼 숨기고 결과 표시
     form.style.display = 'none';
@@ -144,6 +266,21 @@ function showResult() {
     
     // 스크롤을 맨 위로
     window.scrollTo(0, 0);
+}
+
+// 고객용 신청 완료 함수
+function closeApplication() {
+    // 감사 메시지 표시
+    if (confirm('신청이 완료되었습니다.\n\n📞 담당자가 빠른 시일 내에 연락드리겠습니다.\n\n창을 닫으시겠습니까?')) {
+        // 브라우저 창 닫기 시도
+        window.close();
+        
+        // 창이 닫히지 않는 경우를 위한 대안
+        setTimeout(() => {
+            // 페이지를 새로고침하여 처음 상태로 돌아가기
+            window.location.href = window.location.pathname + '?customer=true';
+        }, 1000);
+    }
 }
 
 function resetForm() {
@@ -259,11 +396,13 @@ function fallbackCopyToClipboard(text) {
 
 // QR 코드 생성 함수
 function generatePageQR() {
-    const currentUrl = window.location.href;
+    // 고객용 URL 생성 (파라미터 추가)
+    const baseUrl = window.location.origin + window.location.pathname;
+    const customerUrl = baseUrl + '?customer=true';
     const qrSection = document.getElementById('qrSection');
     const qrcodeDiv = document.getElementById('qrcode');
     
-    console.log('QR 코드 생성 시작:', currentUrl);
+    console.log('QR 코드 생성 시작 (고객용 URL):', customerUrl);
     
     // QR 섹션 표시
     qrSection.style.display = 'block';
@@ -278,8 +417,8 @@ function generatePageQR() {
             qrcodeDiv.innerHTML = '';
             
             try {
-                // QRCode.toDataURL 방식으로 직접 시도
-                QRCode.toDataURL(currentUrl, {
+                // QRCode.toDataURL 방식으로 직접 시도 (고객용 URL 사용)
+                QRCode.toDataURL(customerUrl, {
                     width: 256,
                     height: 256,
                     margin: 2,
@@ -322,7 +461,7 @@ function generatePageQR() {
             console.error('QRCode 라이브러리 로딩 타임아웃');
             
             // Google Charts API를 사용한 대체 방법
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(currentUrl)}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(customerUrl)}`;
             const img = document.createElement('img');
             img.src = qrUrl;
             img.alt = 'QR Code';
@@ -419,11 +558,272 @@ function downloadQR(format) {
     console.log(`QR 코드 다운로드 완료: ${format.toUpperCase()}`);
 }
 
+// 메일 공유 모달 표시
+function showEmailModal() {
+    const emailModal = document.getElementById('emailModal');
+    const recipientEmail = document.getElementById('recipientEmail');
+    const emailSubject = document.getElementById('emailSubject');
+    const emailMessage = document.getElementById('emailMessage');
+    
+    // 기본값 설정
+    emailSubject.value = '구포현대아파트 통신 환경 개선 신청서';
+    
+    // 폼 데이터를 기반으로 메시지 미리 작성
+    const preMessage = `안녕하세요,\n\n구포현대아파트 통신 환경 개선 신청서를 공유드립니다.\n\n▣ 공사요청: ${document.getElementById('name').value}\n▣ 연락처: ${document.getElementById('phone').value}\n▣ 현재 통신사: ${document.querySelector('#workType option:checked')?.textContent || ''}\n${document.getElementById('startDate').value ? `▣ 희망 시작일: ${document.getElementById('startDate').value}\n` : ''}${document.getElementById('description').value ? `▣ 상세 요청사항: ${document.getElementById('description').value}\n` : ''}\n신속한 처리 부탁드립니다.\n\n감사합니다.`;
+    
+    emailMessage.value = preMessage;
+    
+    emailModal.style.display = 'flex';
+    recipientEmail.focus();
+}
+
+// 메일 공유 모달 닫기
+function closeEmailModal() {
+    document.getElementById('emailModal').style.display = 'none';
+}
+
+// 메일 보내기 (실제 구현은 백엔드 필요)
+function sendEmail() {
+    const recipientEmail = document.getElementById('recipientEmail').value;
+    const senderName = document.getElementById('senderName').value;
+    const emailSubject = document.getElementById('emailSubject').value;
+    const emailMessage = document.getElementById('emailMessage').value;
+    
+    if (!recipientEmail) {
+        alert('받는 사람 메일주소를 입력해주세요.');
+        return;
+    }
+    
+    if (!emailSubject.trim()) {
+        alert('제목을 입력해주세요.');
+        return;
+    }
+    
+    // 메일 내용 생성
+    const mailtoUrl = `mailto:${recipientEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailMessage)}`;
+    
+    // 기본 메일 클라이언트로 열기
+    window.location.href = mailtoUrl;
+    
+    // 성공 메시지 표시
+    alert('메일 클라이언트가 열렸습니다. 메일을 확인하고 전송해주세요.');
+    
+    closeEmailModal();
+}
+
+// 문자 공유 모달 표시
+function showSMSModal() {
+    const smsModal = document.getElementById('smsModal');
+    const recipientPhone = document.getElementById('recipientPhone');
+    const smsMessage = document.getElementById('smsMessage');
+    
+    // 폼 데이터를 기반으로 메시지 미리 작성
+    const preMessage = `[구포현대아파트 통신환경개선]
+
+📋 신청정보
+• 공사요청: ${document.getElementById('name').value}
+• 연락처: ${document.getElementById('phone').value}
+• 현재 통신사: ${document.querySelector('#workType option:checked')?.textContent || ''}${document.getElementById('startDate').value ? `
+• 희망 시작일: ${document.getElementById('startDate').value}` : ''}${document.getElementById('description').value ? `
+• 요청사항: ${document.getElementById('description').value}` : ''}
+
+담당자가 빠른 시일 내에 연락드리겠습니다.`;
+    
+    smsMessage.value = preMessage;
+    
+    smsModal.style.display = 'flex';
+    recipientPhone.focus();
+}
+
+// 문자 공유 모달 닫기
+function closeSMSModal() {
+    document.getElementById('smsModal').style.display = 'none';
+}
+
+// 문자 보내기 (실제 구현은 백엔드 필요)
+function sendSMS() {
+    const recipientPhone = document.getElementById('recipientPhone').value;
+    const smsMessage = document.getElementById('smsMessage').value;
+    
+    if (!recipientPhone) {
+        alert('받는 사람 휴대폰번호를 입력해주세요.');
+        return;
+    }
+    
+    if (!smsMessage.trim()) {
+        alert('메시지를 입력해주세요.');
+        return;
+    }
+    
+    // 전화번호 형식 검증
+    const phoneRegex = /^01[0-9]-?\d{3,4}-?\d{4}$/;
+    if (!phoneRegex.test(recipientPhone.replace(/-/g, ''))) {
+        alert('올바른 휴대폰번호 형식을 입력해주세요. (예: 010-1234-5678)');
+        return;
+    }
+    
+    // SMS URL 스키마 사용 (안드로이드/iOS)
+    const smsUrl = `sms:${recipientPhone}?body=${encodeURIComponent(smsMessage)}`;
+    
+    // SMS 앱으로 전송
+    window.location.href = smsUrl;
+    
+    // 성공 메시지 표시
+    alert('문자 메시지 앱이 열렸습니다. 메시지를 확인하고 전송해주세요.');
+    
+    closeSMSModal();
+}
+
+// 관리자에게 자동 문자 + 메일 알림 발송
+function sendAutoNotificationToAdmin(applicationData) {
+    // localStorage에서 관리자 연락처 정보 가져오기
+    const adminPhone = localStorage.getItem('adminPhoneNumber');
+    const adminEmail = localStorage.getItem('adminEmail');
+    
+    if (!adminPhone && !adminEmail) {
+        console.log('관리자 연락처가 설정되지 않았습니다.');
+        // 관리자 연락처 설정 요청
+        setAdminContactInfo();
+        return;
+    }
+    
+    // 알림 내용 생성
+    const notificationMessage = `[구포현대아파트 통신환경개선] 🔔 새 신청 접수
+
+📋 신청정보
+• 신청번호: ${applicationData.applicationNumber}
+• 공사요청: ${applicationData.name}
+• 연락처: ${applicationData.phone}
+• 현재 통신사: ${applicationData.workTypeDisplay}${applicationData.startDate ? `
+• 희망 시작일: ${new Date(applicationData.startDate).toLocaleDateString('ko-KR')}` : ''}${applicationData.description ? `
+• 요청사항: ${applicationData.description}` : ''}
+• 신청일시: ${applicationData.submittedAt}
+
+관리자 페이지: ${window.location.origin + window.location.pathname.replace('index.html', '관리자.html')}`;
+    
+    // 1. 문자 알림 발송 (설정된 경우)
+    if (adminPhone) {
+        const smsUrl = `sms:${adminPhone}?body=${encodeURIComponent(notificationMessage)}`;
+        try {
+            window.open(smsUrl, '_blank');
+            console.log('관리자에게 자동 문자 알림이 발송되었습니다.');
+        } catch (error) {
+            console.error('자동 문자 발송 실패:', error);
+        }
+    }
+    
+    // 2. 메일 알림 발송 (설정된 경우)
+    if (adminEmail) {
+        const emailSubject = `[구포현대아파트] 새 신청 접수 - ${applicationData.applicationNumber}`;
+        const emailBody = notificationMessage.replace(/• /g, '- '); // 메일용 포맷 조정
+        
+        const mailtoUrl = `mailto:${adminEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+        
+        try {
+            setTimeout(() => {
+                window.open(mailtoUrl, '_blank');
+                console.log('관리자에게 자동 메일 알림이 발송되었습니다.');
+            }, 1000); // 문자 발송 후 1초 뒤에 메일 발송
+        } catch (error) {
+            console.error('자동 메일 발송 실패:', error);
+        }
+    }
+}
+
+// 관리자 연락처 설정 (휴대폰 + 이메일)
+function setAdminContactInfo() {
+    // 휴대폰번호 설정
+    const adminPhone = prompt(`관리자 휴대폰번호를 입력해주세요.
+(신청서 접수 시 자동으로 문자 알림을 받을 번호입니다)
+
+예: 010-1234-5678
+※ 건너뛰려면 취소를 누르세요`);
+    
+    if (adminPhone) {
+        const phoneRegex = /^01[0-9]-?\d{3,4}-?\d{4}$/;
+        if (phoneRegex.test(adminPhone.replace(/-/g, ''))) {
+            localStorage.setItem('adminPhoneNumber', adminPhone);
+        } else {
+            alert('올바른 휴대폰번호 형식을 입력해주세요. (예: 010-1234-5678)');
+            return setAdminContactInfo();
+        }
+    }
+    
+    // 이메일 설정
+    const adminEmail = prompt(`관리자 이메일 주소를 입력해주세요.
+(신청서 접수 시 자동으로 메일 알림을 받을 주소입니다)
+
+예: admin@example.com
+※ 건너뛰려면 취소를 누르세요`);
+    
+    if (adminEmail) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (emailRegex.test(adminEmail)) {
+            localStorage.setItem('adminEmail', adminEmail);
+        } else {
+            alert('올바른 이메일 형식을 입력해주세요. (예: admin@example.com)');
+            return setAdminContactInfo();
+        }
+    }
+    
+    // 설정 완료 메시지
+    const setPhone = localStorage.getItem('adminPhoneNumber');
+    const setEmail = localStorage.getItem('adminEmail');
+    
+    if (setPhone || setEmail) {
+        let message = '✅ 관리자 연락처가 설정되었습니다:\n\n';
+        if (setPhone) message += `📱 문자: ${setPhone}\n`;
+        if (setEmail) message += `📧 메일: ${setEmail}\n`;
+        message += '\n새로운 신청이 접수되면 자동으로 알림을 받습니다.';
+        alert(message);
+    } else {
+        console.log('관리자 연락처 설정이 취소되었습니다.');
+    }
+}
+
+// 기존 함수명 유지 (호환성을 위해)
+function setAdminPhoneNumber() {
+    return setAdminContactInfo();
+}
+
+// 관리자 번호 변경 함수 (관리자 페이지에서 호출 가능)
+function changeAdminPhoneNumber() {
+    const currentPhone = localStorage.getItem('adminPhoneNumber');
+    const newPhone = prompt(`현재 관리자 번호: ${currentPhone || '설정되지 않음'}
+
+새로운 관리자 휴대폰번호를 입력해주세요:`, currentPhone);
+    
+    if (newPhone) {
+        const phoneRegex = /^01[0-9]-?\d{3,4}-?\d{4}$/;
+        if (phoneRegex.test(newPhone.replace(/-/g, ''))) {
+            localStorage.setItem('adminPhoneNumber', newPhone);
+            alert(`관리자 번호가 변경되었습니다: ${newPhone}`);
+            return newPhone;
+        } else {
+            alert('올바른 휴대폰번호 형식을 입력해주세요.');
+            return changeAdminPhoneNumber();
+        }
+    }
+}
+
 // 페이지 로드시 카카오 SDK 로그인 상태 확인
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof Kakao !== 'undefined' && Kakao.isInitialized()) {
         console.log('카카오 SDK 초기화 완료');
     } else {
         console.warn('카카오 SDK 초기화 실패 - 앱키를 확인해주세요');
+    }
+    
+    // URL 파라미터 확인하여 고객 모드일 때만 관리자 번호 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const isCustomerMode = urlParams.has('customer') || urlParams.has('apply');
+    
+    // 최초 로드시 관리자 연락처가 없으면 설정 요청 (고객 모드가 아닐 때만)
+    if (!isCustomerMode && !localStorage.getItem('adminPhoneNumber') && !localStorage.getItem('adminEmail')) {
+        setTimeout(() => {
+            if (confirm('관리자 연락처를 설정하시겠습니까?\n신청서 접수 시 자동으로 문자/메일 알림을 받을 수 있습니다.')) {
+                setAdminContactInfo();
+            }
+        }, 1000);
     }
 });
