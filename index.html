@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta property="og:title" content="구포현대아파트 통신 환경 개선 신청서">
+    <meta property="og:description" content="구포현대아파트 통신 환경 개선 신청서">
+    <meta property="og:url" content="">
+    <title>구포현대아파트 통신 환경 개선 신청서</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="mainTitle" onclick="editTitle()" style="cursor: pointer; user-select: none;" title="클릭하여 제목 수정">📡 구포현대아파트 통신 환경 개선 신청서</h1>
+            <p id="mainSubtitle" onclick="editSubtitle()" style="cursor: pointer; user-select: none;" title="클릭하여 부제목 수정">통신 환경 개선을 위한 신청서를 작성해주세요</p>
+        </header>
+
+        <form id="applicationForm" class="application-form">
+            <div class="form-group">
+                <label for="name">공사요청 :  동 / 호수 *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">연락처 *</label>
+                <input type="tel" id="phone" name="phone" required placeholder="010-1234-5678">
+            </div>
+
+            <div class="form-group">
+                <label for="workType">현재 사용 중인 인터넷 통신사 *</label>
+                <select id="workType" name="workType" required>
+                    <option value="">선택하세요</option>
+                    <option value="interior">KT</option>
+                    <option value="exterior">SKT</option>
+                    <option value="plumbing">LGU+</option>
+                    <option value="electrical">기타(지역방송)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="startDate">희망 시작일</label>
+                <input type="date" id="startDate" name="startDate">
+            </div>
+
+            <div class="form-group">
+                <label for="description">상세 요청사항</label>
+                <textarea id="description" name="description" placeholder="공사에 대한 상세한 요청사항이나 특이사항을 입력하세요"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="privacy" name="privacy" required>
+                    개인정보 수집 및 이용에 동의합니다 *
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <!-- 상단: 메일/폰번호 입력 그룹 (관리자용) -->
+                <div id="adminInputSection" class="input-section">
+                    <div class="input-group">
+                        <button type="button" class="email-btn" onclick="showEmailInputModal()">메일 입력</button>
+                        <span id="emailDisplay" class="input-display"></span>
+                    </div>
+                    <div class="input-group">
+                        <button type="button" class="sms-btn" onclick="showPhoneInputModal()">폰번호 입력</button>
+                        <span id="phoneDisplay" class="input-display"></span>
+                    </div>
+                </div>
+                
+                <!-- 하단: 공유 및 QR 코드 버튼들 (관리자용) -->
+                <div id="adminActionSection" class="action-section">
+                    <button type="button" class="share-btn" onclick="shareToKakao()">카카오톡 공유</button>
+                    <button type="button" class="qr-btn" id="qrGenerateBtn" onclick="generatePageQR()">📱 QR 코드 생성</button>
+                    <button type="button" class="qr-btn" id="qrDeleteBtn" onclick="deleteQR()" style="display: none;">🗑️ QR 코드 삭제</button>
+                </div>
+                
+                <!-- 고객용: 신청서 제출 버튼 -->
+                <div id="customerSubmitSection" class="customer-submit-section" style="display: none;">
+                    <button type="submit" class="submit-btn">신청서 제출</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- QR 코드 생성 섹션 -->
+        <div id="qrSection" class="qr-section" style="display: none;">
+            <h2>📱 QR 코드</h2>
+            <p>QR코드를 다운로드하여 홍보물에 붙여 넣어주세요</p>
+            <div id="qrCodeContainer" class="qr-container">
+                <div id="qrcode"></div>
+            </div>
+            <div class="qr-actions">
+                <button type="button" class="download-btn" onclick="downloadQR('png')">PNG 다운로드</button>
+                <button type="button" class="download-btn" onclick="downloadQR('jpg')">JPG 다운로드</button>
+                <button type="button" class="close-btn" onclick="hideQRSection()">닫기</button>
+            </div>
+        </div>
+
+        <!-- 메일 입력 모달 -->
+        <div id="emailInputModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeEmailInputModal()">×</span>
+                <h2>📧 메일 주소 입력</h2>
+                <div class="email-form">
+                    <div class="form-group">
+                        <label>메일 주소 입력 (최대 3개)</label>
+                        <div id="emailInputs">
+                            <div class="email-input-row">
+                                <input type="email" class="email-input" placeholder="example1@email.com">
+                                <button type="button" class="remove-btn" onclick="removeEmailInput(this)" style="display: none;">삭제</button>
+                            </div>
+                        </div>
+                        <button type="button" class="add-btn" onclick="addEmailInput()" id="addEmailBtn">+ 메일 주소 추가</button>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="saveEmailAddresses()">저장</button>
+                        <button type="button" class="close-btn" onclick="closeEmailInputModal()">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 폰번호 입력 모달 -->
+        <div id="phoneInputModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closePhoneInputModal()">×</span>
+                <h2>📱 폰번호 입력</h2>
+                <div class="email-form">
+                    <div class="form-group">
+                        <label>폰번호 입력 (최대 3개)</label>
+                        <div id="phoneInputs">
+                            <div class="phone-input-row">
+                                <input type="tel" class="phone-input" placeholder="010-1234-5678">
+                                <button type="button" class="remove-btn" onclick="removePhoneInput(this)" style="display: none;">삭제</button>
+                            </div>
+                        </div>
+                        <button type="button" class="add-btn" onclick="addPhoneInput()" id="addPhoneBtn">+ 폰번호 추가</button>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="savePhoneNumbers()">저장</button>
+                        <button type="button" class="close-btn" onclick="closePhoneInputModal()">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 메일 공유 모달 -->
+        <div id="emailModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeEmailModal()">×</span>
+                <h2>📧 메일로 공유</h2>
+                <div class="email-form">
+                    <div class="form-group">
+                        <label for="recipientEmail">받는 사람 메일주소 *</label>
+                        <input type="email" id="recipientEmail" placeholder="example@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="senderName">보내는 사람 이름</label>
+                        <input type="text" id="senderName" placeholder="관리자" value="관리자">
+                    </div>
+                    <div class="form-group">
+                        <label for="emailSubject">제목</label>
+                        <input type="text" id="emailSubject" value="구포현대아파트 통신 환경 개선 신청서">
+                    </div>
+                    <div class="form-group">
+                        <label for="emailMessage">메시지</label>
+                        <textarea id="emailMessage" rows="5" placeholder="추가 메시지를 입력하세요..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="sendEmail()">메일 보내기</button>
+                        <button type="button" class="close-btn" onclick="closeEmailModal()">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 문자 공유 모달 -->
+        <div id="smsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeSMSModal()">×</span>
+                <h2>📱 문자로 공유</h2>
+                <div class="email-form">
+                    <div class="form-group">
+                        <label for="recipientPhone">받는 사람 휴대폰번호 *</label>
+                        <input type="tel" id="recipientPhone" placeholder="010-1234-5678" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="smsMessage">메시지</label>
+                        <textarea id="smsMessage" rows="6" placeholder="문자 메시지를 입력하세요..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="sendSMS()">문자 보내기</button>
+                        <button type="button" class="close-btn" onclick="closeSMSModal()">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="result" class="result-section" style="display: none;">
+            <h2>✅ 신청이 완료되었습니다!</h2>
+            <div id="resultContent"></div>
+            <div class="result-actions">
+                <button type="button" class="share-btn" onclick="shareResultToKakao()">결과 카카오톡 공유</button>
+                <button type="button" class="new-btn" onclick="resetForm()">새 신청서 작성</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+    <script src="https://unpkg.com/qrcode/build/qrcode.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

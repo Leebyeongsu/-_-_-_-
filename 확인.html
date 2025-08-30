@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>신청서 확인 - 구포현대아파트 통신 환경 개선</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .search-section {
+            background: #f8f9fa;
+            padding: 30px 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .search-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+        
+        .search-btn {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .search-btn:hover {
+            background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        .error-msg {
+            color: #f44336;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .no-result {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 신청서 확인</h1>
+            <p>신청번호로 신청 내용을 확인하실 수 있습니다</p>
+        </header>
+
+        <div class="search-section">
+            <div class="search-form">
+                <h3>신청번호를 입력하세요</h3>
+                <input type="text" id="applicationNumber" class="search-input" 
+                       placeholder="예: APP12345678" maxlength="11">
+                <div>
+                    <button onclick="searchApplication()" class="search-btn">🔍 신청서 조회</button>
+                </div>
+                <div id="errorMsg" class="error-msg" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div id="resultSection" class="result-section" style="display: none;">
+            <h2>📋 신청 내용</h2>
+            <div id="applicationResult" class="result-content"></div>
+            <div class="result-actions">
+                <button type="button" class="new-btn" onclick="searchNew()">다른 신청서 조회</button>
+                <button type="button" class="close-btn" onclick="window.close()">닫기</button>
+            </div>
+        </div>
+
+        <div id="noResult" class="no-result" style="display: none;">
+            <h3>❌ 신청서를 찾을 수 없습니다</h3>
+            <p>신청번호를 다시 확인해 주세요.</p>
+            <button onclick="searchNew()" class="search-btn">다시 검색</button>
+        </div>
+
+        <div class="instructions">
+            <h3>📝 이용 안내</h3>
+            <ul>
+                <li>신청서 제출 후 받은 신청번호를 입력하세요</li>
+                <li>신청번호는 "APP"로 시작하는 11자리 숫자입니다</li>
+                <li>신청 내용, 처리 상태를 확인할 수 있습니다</li>
+                <li>문의사항은 관리사무소로 연락주세요</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 임시 데이터 저장소 (실제로는 서버 데이터베이스 사용)
+        const applicationData = JSON.parse(localStorage.getItem('applicationData') || '{}');
+
+        function searchApplication() {
+            const appNumber = document.getElementById('applicationNumber').value.trim();
+            const errorMsg = document.getElementById('errorMsg');
+            const resultSection = document.getElementById('resultSection');
+            const noResult = document.getElementById('noResult');
+            
+            // 입력 검증
+            if (!appNumber) {
+                showError('신청번호를 입력해주세요.');
+                return;
+            }
+            
+            if (!appNumber.startsWith('APP') || appNumber.length !== 11) {
+                showError('올바른 신청번호 형식이 아닙니다. (예: APP12345678)');
+                return;
+            }
+            
+            hideError();
+            
+            // 데이터 검색
+            const data = applicationData[appNumber];
+            if (data) {
+                showApplicationResult(data);
+            } else {
+                showNoResult();
+            }
+        }
+
+        function showApplicationResult(data) {
+            const resultSection = document.getElementById('resultSection');
+            const applicationResult = document.getElementById('applicationResult');
+            const noResult = document.getElementById('noResult');
+            
+            noResult.style.display = 'none';
+            
+            applicationResult.innerHTML = `
+                <div class="result-item">
+                    <span class="result-label">신청번호:</span>
+                    <span class="result-value">${data.applicationNumber}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">신청자:</span>
+                    <span class="result-value">${data.name}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">연락처:</span>
+                    <span class="result-value">${data.phone}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">현재 통신사:</span>
+                    <span class="result-value">${data.workTypeDisplay || data.workType}</span>
+                </div>
+                ${data.startDate ? `
+                <div class="result-item">
+                    <span class="result-label">희망 시작일:</span>
+                    <span class="result-value">${new Date(data.startDate).toLocaleDateString('ko-KR')}</span>
+                </div>
+                ` : ''}
+                ${data.description ? `
+                <div class="result-item">
+                    <span class="result-label">요청사항:</span>
+                    <span class="result-value">${data.description}</span>
+                </div>
+                ` : ''}
+                <div class="result-item">
+                    <span class="result-label">신청일시:</span>
+                    <span class="result-value">${data.submittedAt}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">처리상태:</span>
+                    <span class="result-value" style="color: #4CAF50; font-weight: 600;">접수완료</span>
+                </div>
+                <div class="result-item" style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;">
+                    <span class="result-value" style="color: #2c5aa0; font-weight: 600;">
+                        📞 담당자가 빠른 시일 내에 연락드릴 예정입니다.
+                    </span>
+                </div>
+            `;
+            
+            resultSection.style.display = 'block';
+            document.querySelector('.search-section').style.display = 'none';
+        }
+
+        function showNoResult() {
+            document.getElementById('noResult').style.display = 'block';
+            document.getElementById('resultSection').style.display = 'none';
+        }
+
+        function searchNew() {
+            document.getElementById('applicationNumber').value = '';
+            document.getElementById('resultSection').style.display = 'none';
+            document.getElementById('noResult').style.display = 'none';
+            document.querySelector('.search-section').style.display = 'block';
+            hideError();
+        }
+
+        function showError(message) {
+            const errorMsg = document.getElementById('errorMsg');
+            errorMsg.textContent = message;
+            errorMsg.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+
+        // Enter 키로 검색
+        document.getElementById('applicationNumber').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchApplication();
+            }
+        });
+
+        // 페이지 로드시 URL 파라미터에서 신청번호 확인
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const appNumber = urlParams.get('number');
+            if (appNumber) {
+                document.getElementById('applicationNumber').value = appNumber;
+                searchApplication();
+            }
+        });
+    </script>
+</body>
+</html>
