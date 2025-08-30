@@ -64,13 +64,107 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 고객 모드인 경우 신청서 제출 로직 실행
         if (isCustomerMode) {
-            processFormSubmission();
+            processCustomerFormSubmission(e);
             return;
         }
         
         // 관리자 모드인 경우 메일 공유 모달 표시 (관리자가 빈 설문지 공유할 때)
         showEmailModal();
     });
+    
+    // 고객용 신청서 제출 처리
+    function processCustomerFormSubmission(event) {
+        const formDataObj = new FormData(event.target);
+        const applicationData = {};
+        
+        for (let [key, value] of formDataObj.entries()) {
+            applicationData[key] = value;
+        }
+        
+        // 공사 종류가 기타인 경우 다른 작업 내용 포함
+        if (applicationData.workType === 'other' && applicationData.otherWork) {
+            applicationData.workTypeDisplay = `기타 (${applicationData.otherWork})`;
+        } else {
+            const workTypeOptions = {
+                'interior': 'KT',
+                'exterior': 'SKT',
+                'plumbing': 'LGU+',
+                'electrical': '기타(지역방송)',
+                'tile': '타일 공사',
+                'painting': '도색 공사',
+                'other': '기타'
+            };
+            applicationData.workTypeDisplay = workTypeOptions[applicationData.workType] || applicationData.workType;
+        }
+        
+        // 예산 표시명 설정
+        const budgetOptions = {
+            'under-100': '100만원 미만',
+            '100-300': '100만원 - 300만원',
+            '300-500': '300만원 - 500만원',
+            '500-1000': '500만원 - 1000만원',
+            'over-1000': '1000만원 이상'
+        };
+        applicationData.budgetDisplay = budgetOptions[applicationData.budget] || '미정';
+        
+        // 신청 번호 생성 (현재 시간 기반)
+        applicationData.applicationNumber = 'APP' + Date.now().toString().slice(-8);
+        applicationData.submittedAt = new Date().toLocaleString('ko-KR');
+        
+        // 로컬 스토리지에 신청 데이터 저장
+        const existingData = JSON.parse(localStorage.getItem('applicationData') || '{}');
+        existingData[applicationData.applicationNumber] = applicationData;
+        localStorage.setItem('applicationData', JSON.stringify(existingData));
+        
+        // 관리자에게 SMS 전송
+        sendSMSToAdmin(applicationData);
+        
+        // 성공 메시지 표시
+        alert('✅ 신청서가 성공적으로 제출되었습니다!\n\n관리자에게 SMS가 전송되었습니다.');
+        
+        // 폼 초기화
+        event.target.reset();
+        
+        // 결과 페이지로 이동
+        showResult();
+    }
+    
+    // 관리자에게 SMS 전송
+    function sendSMSToAdmin(applicationData) {
+        const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+        
+        if (savedPhones.length === 0) {
+            console.warn('관리자 전화번호가 설정되지 않았습니다.');
+            alert('⚠️ 관리자 전화번호가 설정되지 않았습니다.\n관리자에게 문의해주세요.');
+            return;
+        }
+        
+        // 첫 번째 전화번호로 SMS 전송
+        const adminPhone = savedPhones[0];
+        
+        // SMS 내용 구성
+        const smsContent = `🔔 공사 신청서 접수\n\n📝 신청자: ${applicationData.name}\n📱 연락처: ${applicationData.phone}\n🏠 주소: ${applicationData.address}\n🏗️ 공사종류: ${applicationData.workTypeDisplay}\n💰 예산: ${applicationData.budgetDisplay}\n📋 요청사항: ${applicationData.request}\n⏰ 접수시간: ${applicationData.submittedAt}\n🔢 신청번호: ${applicationData.applicationNumber}`;
+        
+        // SMS 앱 호출 (모바일에서 작동)
+        const smsUrl = `sms:${adminPhone}?body=${encodeURIComponent(smsContent)}`;
+        
+        try {
+            // 모바일 환경에서 SMS 앱 호출
+            if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                window.location.href = smsUrl;
+            } else {
+                // 데스크톱에서는 전화번호와 내용을 복사
+                const fullMessage = `전화번호: ${adminPhone}\n\n${smsContent}`;
+                navigator.clipboard.writeText(fullMessage).then(() => {
+                    alert(`📱 관리자 전화번호와 SMS 내용이 클립보드에 복사되었습니다.\n\n전화번호: ${adminPhone}\n\nSMS 내용:\n${smsContent}`);
+                });
+            }
+        } catch (error) {
+            console.error('SMS 전송 중 오류:', error);
+            // 폴백: 전화번호와 내용을 표시
+            alert(`📱 관리자 전화번호: ${adminPhone}\n\nSMS 내용:\n${smsContent}\n\n위 내용을 복사하여 SMS를 전송해주세요.`);
+        }
+    }
     
     function processFormSubmission() {
         
