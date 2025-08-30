@@ -15,6 +15,42 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 고객용 모드인 경우 QR 생성 버튼과 카카오톡 공유 버튼, 문자 버튼 숨기고 제출 버튼 텍스트 변경
     if (isCustomerMode) {
+        // URL 파라미터로 전달된 관리자 데이터(제목/부제목/연락처)를 localStorage에 주입하여
+        // 다른 기기(고객 폰)에서도 관리자 설정이 반영되도록 동기화
+        (function syncAdminDataFromURL() {
+            try {
+                const phonesParam = urlParams.get('phones');
+                const emailsParam = urlParams.get('emails');
+                const titleParam = urlParams.get('title');
+                const subtitleParam = urlParams.get('subtitle');
+                
+                if (phonesParam) {
+                    const phones = decodeURIComponent(phonesParam).split(',').map(p => p.trim()).filter(Boolean);
+                    if (phones.length > 0) {
+                        localStorage.setItem('savedPhoneNumbers', JSON.stringify(phones));
+                        // 호환 키 저장
+                        localStorage.setItem('adminPhone', phones[0]);
+                        localStorage.setItem('adminPhoneNumber', phones[0]);
+                    }
+                }
+                if (emailsParam) {
+                    const emails = decodeURIComponent(emailsParam).split(',').map(e => e.trim()).filter(Boolean);
+                    if (emails.length > 0) {
+                        localStorage.setItem('savedEmailAddresses', JSON.stringify(emails));
+                        // 호환 키 저장
+                        localStorage.setItem('adminEmail', emails[0]);
+                    }
+                }
+                if (titleParam) {
+                    localStorage.setItem('mainTitle', decodeURIComponent(titleParam));
+                }
+                if (subtitleParam) {
+                    localStorage.setItem('mainSubtitle', decodeURIComponent(subtitleParam));
+                }
+            } catch (e) {
+                console.warn('URL 기반 관리자 데이터 동기화 실패:', e);
+            }
+        })();
         const qrBtn = document.getElementById('qrGenerateBtn');
         const shareBtn = document.querySelector('.share-btn');
         const smsBtn = document.querySelector('.sms-btn');
@@ -32,11 +68,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // 고객용 제출 버튼 표시
         if (customerSubmitSection) customerSubmitSection.style.display = 'block';
         
-        // 헤더 텍스트를 고객용으로 변경
+        // 저장된 제목/부제목이 있으면 우선 사용, 없으면 기본 문구 표시
         const headerTitle = document.querySelector('header h1');
         const headerSubtext = document.querySelector('header p');
-        if (headerTitle) headerTitle.textContent = '📡 통신 환경 개선 신청서';
-        if (headerSubtext) headerSubtext.textContent = '아래 정보를 입력하여 신청서를 작성해주세요';
+        const savedTitle = localStorage.getItem('mainTitle');
+        const savedSubtitle = localStorage.getItem('mainSubtitle');
+        if (headerTitle) headerTitle.textContent = savedTitle || '📡 통신 환경 개선 신청서';
+        if (headerSubtext) headerSubtext.textContent = savedSubtitle || '아래 정보를 입력하여 신청서를 작성해주세요';
         
         console.log('고객용 모드로 실행됨');
     } else {
