@@ -47,6 +47,14 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('관리자용 모드로 실행됨');
     }
     
+    // 저장된 제목/부제목 불러오기 (모든 모드에서 공통)
+    loadSavedTitles();
+    
+    // 저장된 메일/폰번호 표시 (관리자 모드에서만)
+    if (!isCustomerMode) {
+        displaySavedInputs();
+    }
+    
     // 기타 공사 선택시 추가 입력란 표시
     workTypeSelect.addEventListener('change', function() {
         if (this.value === 'other') {
@@ -134,15 +142,52 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('=== SMS 전송 디버깅 ===');
         console.log('localStorage 전체 내용:', localStorage);
         
-        const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
-        console.log('저장된 전화번호:', savedPhones);
+        // 다양한 키로 전화번호 찾기 시도
+        let savedPhones = [];
+        
+        // 1차 시도: savedPhoneNumbers
+        const savedPhones1 = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+        if (savedPhones1.length > 0) {
+            savedPhones = savedPhones1;
+            console.log('savedPhoneNumbers에서 전화번호 찾음:', savedPhones);
+        }
+        
+        // 2차 시도: adminPhone (단일 전화번호)
+        if (savedPhones.length === 0) {
+            const adminPhone = localStorage.getItem('adminPhone');
+            if (adminPhone) {
+                savedPhones = [adminPhone];
+                console.log('adminPhone에서 전화번호 찾음:', savedPhones);
+            }
+        }
+        
+        // 3차 시도: adminContactInfo
+        if (savedPhones.length === 0) {
+            const adminContactInfo = JSON.parse(localStorage.getItem('adminContactInfo') || '{}');
+            if (adminContactInfo.phone) {
+                savedPhones = [adminPhone];
+                console.log('adminContactInfo에서 전화번호 찾음:', savedPhones);
+            }
+        }
+        
+        console.log('최종 사용할 전화번호:', savedPhones);
         console.log('전화번호 개수:', savedPhones.length);
         
         if (savedPhones.length === 0) {
             console.warn('관리자 전화번호가 설정되지 않았습니다.');
             console.log('사용 가능한 localStorage 키들:', Object.keys(localStorage));
-            alert('⚠️ 관리자 전화번호가 설정되지 않았습니다.\n관리자에게 문의해주세요.');
-            return;
+            
+            // 사용자에게 전화번호 입력 요청
+            const userPhone = prompt('관리자 전화번호를 입력해주세요 (예: 010-1234-5678):');
+            if (userPhone && userPhone.trim()) {
+                savedPhones = [userPhone.trim()];
+                // 입력받은 전화번호를 localStorage에 저장
+                localStorage.setItem('adminPhone', userPhone.trim());
+                console.log('사용자 입력 전화번호 저장됨:', savedPhones);
+            } else {
+                alert('⚠️ 관리자 전화번호가 설정되지 않았습니다.\n관리자에게 문의해주세요.');
+                return;
+            }
         }
         
         // 첫 번째 전화번호로 SMS 전송
