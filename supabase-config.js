@@ -49,3 +49,6 @@ CREATE TABLE notification_logs (
     sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 */
+
+// Supabase Edge Functions 기본 URL (프로젝트 ref 기반)
+export const functionsBaseUrl = `https://${new URL(supabaseUrl).hostname.split('.')[0]}.functions.supabase.co`

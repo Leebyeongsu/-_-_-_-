@@ -1,5 +1,6 @@
 // 알림 서비스 (SMS, 이메일)
 import { saveNotificationLog } from './supabase-api.js';
+import { functionsBaseUrl } from './supabase-config.js';
 
 // SMS 발송 (Twilio API 연동 예시)
 export async function sendSMS(phoneNumber, message) {
@@ -40,35 +41,31 @@ export async function sendSMS(phoneNumber, message) {
 // 이메일 발송 (Supabase Edge Function 연동 예시)
 export async function sendEmail(emailAddress, subject, message) {
     try {
-        // TODO: 실제 Supabase Edge Function 연동
-        // const response = await fetch('/api/send-email', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ emailAddress, subject, message })
-        // });
-        
-        console.log('이메일 발송 (시뮬레이션):', { emailAddress, subject, message });
-        
-        // 알림 로그 저장
+        const response = await fetch(`${functionsBaseUrl}/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: emailAddress, subject, text: message })
+        });
+
+        const ok = response.ok;
+        const result = ok ? await response.json().catch(() => ({})) : await response.text().catch(() => '');
+
         await saveNotificationLog({
-            type: 'email',
+            notification_type: 'email',
             recipient: emailAddress,
             message: `${subject}: ${message}`,
-            success: true
+            status: ok ? 'sent' : 'failed'
         });
-        
-        return { success: true };
+
+        return { success: ok, result };
     } catch (error) {
         console.error('이메일 발송 실패:', error);
-        
-        // 실패 로그 저장
         await saveNotificationLog({
-            type: 'email',
+            notification_type: 'email',
             recipient: emailAddress,
             message: `${subject}: ${message}`,
-            success: false
+            status: 'failed'
         });
-        
         return { success: false, error: error.message };
     }
 }
@@ -83,7 +80,7 @@ export async function sendApplicationNotification(applicationData, adminSettings
     try {
         // SMS 알림 발송
         if (adminSettings.phones && adminSettings.phones.length > 0) {
-            const smsMessage = `🔔 새 신청서 접수\n\n신청자: ${applicationData.name}\n연락처: ${applicationData.phone}\n주소: ${applicationData.address || '미입력'}\n내용: ${applicationData.content || '미입력'}`;
+            const smsMessage = `🔔 새 신청서 접수\n\n신청자: ${applicationData.name}\n연락처: ${applicationData.phone}\n통신사: ${applicationData.workType || '미입력'}\n요청사항: ${applicationData.description || '미입력'}`;
             
             for (const phone of adminSettings.phones) {
                 if (phone && phone.trim()) {
@@ -102,19 +99,28 @@ export async function sendApplicationNotification(applicationData, adminSettings
 신청자 정보:
 - 이름: ${applicationData.name}
 - 연락처: ${applicationData.phone}
-- 이메일: ${applicationData.email || '미입력'}
-- 주소: ${applicationData.address || '미입력'}
+- 통신사: ${applicationData.workType || '미입력'}
 
 신청 내용:
-${applicationData.content || '내용 없음'}
+${applicationData.description || '내용 없음'}
 
-접수 시간: ${new Date(applicationData.submittedAt).toLocaleString('ko-KR')}
+접수 시간: ${new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR')}
             `;
             
             for (const email of adminSettings.emails) {
                 if (email && email.trim()) {
                     const result = await sendEmail(email.trim(), emailSubject, emailMessage);
                     results.email.push({ email, success: result.success });
+                }
+            }
+
+            // 모든 이메일 발송이 실패하면 폴백 (mailto) 시도
+            const anySuccess = results.email.some(r => r.success);
+            if (!anySuccess && adminSettings.emails[0]) {
+                try {
+                    sendFallbackNotification('email', adminSettings.emails[0], emailMessage);
+                } catch (e) {
+                    console.warn('폴백 이메일 시도 실패:', e);
                 }
             }
         }
