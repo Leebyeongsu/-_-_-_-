@@ -320,7 +320,30 @@ function sendNotification(type) {
 // QR 코드 생성
 function generateQRCode() {
     const baseUrl = window.location.origin + window.location.pathname.replace('관리자.html', 'index.html');
-    const customerUrl = baseUrl + '?customer=true';
+    // 고객용 URL에 관리자 설정값(제목/부제목/전화/메일)을 포함하여 다른 기기에서도 동기화되도록 처리
+    const urlObj = new URL(baseUrl);
+    urlObj.searchParams.set('customer', 'true');
+    try {
+        const phones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+        const emails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+        const title = localStorage.getItem('mainTitle') || '';
+        const subtitle = localStorage.getItem('mainSubtitle') || '';
+        if (phones && phones.length > 0) {
+            urlObj.searchParams.set('phones', phones.join(','));
+        }
+        if (emails && emails.length > 0) {
+            urlObj.searchParams.set('emails', emails.join(','));
+        }
+        if (title) {
+            urlObj.searchParams.set('title', title);
+        }
+        if (subtitle) {
+            urlObj.searchParams.set('subtitle', subtitle);
+        }
+    } catch (e) {
+        console.warn('QR URL 파라미터 구성 실패:', e);
+    }
+    const customerUrl = urlObj.toString();
     
     // 새 창에서 QR 코드 생성 페이지 열기
     const qrWindow = window.open('', '_blank', 'width=400,height=500');
