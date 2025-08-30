@@ -20,14 +20,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const smsBtn = document.querySelector('.sms-btn');
         const submitBtn = document.querySelector('.submit-btn');
         const qrSection = document.getElementById('qrSection');
+        const adminInputSection = document.getElementById('adminInputSection');
+        const adminActionSection = document.getElementById('adminActionSection');
+        const customerSubmitSection = document.getElementById('customerSubmitSection');
         
-        if (qrBtn) qrBtn.style.display = 'none';
-        if (shareBtn) shareBtn.style.display = 'none';
-        if (smsBtn) smsBtn.style.display = 'none';
+        // 관리자용 요소들 숨기기
+        if (adminInputSection) adminInputSection.style.display = 'none';
+        if (adminActionSection) adminActionSection.style.display = 'none';
         if (qrSection) qrSection.style.display = 'none';
         
-        // 고객용 모드에서는 제출 버튼 텍스트를 "신청서 제출"로 변경
-        if (submitBtn) submitBtn.textContent = '신청서 제출';
+        // 고객용 제출 버튼 표시
+        if (customerSubmitSection) customerSubmitSection.style.display = 'block';
         
         // 헤더 텍스트를 고객용으로 변경
         const headerTitle = document.querySelector('header h1');
@@ -37,6 +40,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('고객용 모드로 실행됨');
     } else {
+        // 관리자용 모드일 때 고객용 제출 버튼 숨기기
+        const customerSubmitSection = document.getElementById('customerSubmitSection');
+        if (customerSubmitSection) customerSubmitSection.style.display = 'none';
+        
         console.log('관리자용 모드로 실행됨');
     }
     
@@ -447,6 +454,12 @@ function generatePageQR() {
                     
                     console.log('QR 코드 생성 성공');
                     qrSection.scrollIntoView({ behavior: 'smooth' });
+                    
+                    // QR 코드 생성 성공 시 삭제 버튼 표시
+                    const qrDeleteBtn = document.getElementById('qrDeleteBtn');
+                    if (qrDeleteBtn) {
+                        qrDeleteBtn.style.display = 'inline-block';
+                    }
                 });
                 
             } catch (e) {
@@ -484,6 +497,12 @@ function generatePageQR() {
             
             console.log('QR 코드 생성 성공 (대체 API 사용)');
             qrSection.scrollIntoView({ behavior: 'smooth' });
+            
+            // QR 코드 생성 성공 시 삭제 버튼 표시 (대체 API 사용 시에도)
+            const qrDeleteBtn = document.getElementById('qrDeleteBtn');
+            if (qrDeleteBtn) {
+                qrDeleteBtn.style.display = 'inline-block';
+            }
         }
     }
     
@@ -814,6 +833,12 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('카카오 SDK 초기화 실패 - 앱키를 확인해주세요');
     }
     
+    // 저장된 제목/부제목 불러오기
+    loadSavedTitles();
+    
+    // 저장된 메일/폰번호 표시
+    displaySavedInputs();
+    
     // URL 파라미터 확인하여 고객 모드일 때만 관리자 번호 확인
     const urlParams = new URLSearchParams(window.location.search);
     const isCustomerMode = urlParams.has('customer') || urlParams.has('apply');
@@ -827,3 +852,471 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     }
 });
+
+// ===== 새로운 기능들 =====
+
+// 메일 입력 모달 표시
+function showEmailInputModal() {
+    const modal = document.getElementById('emailInputModal');
+    const emailInputs = document.getElementById('emailInputs');
+    
+    // 기존 저장된 메일 주소들 불러오기
+    const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+    
+    // 기존 입력란들 제거
+    emailInputs.innerHTML = '';
+    
+    // 저장된 메일 주소들로 입력란 생성
+    if (savedEmails.length > 0) {
+        savedEmails.forEach((email, index) => {
+            addEmailInput(email);
+        });
+    } else {
+        // 빈 입력란 하나 생성
+        addEmailInput();
+    }
+    
+    modal.style.display = 'block';
+    updateEmailAddButton();
+}
+
+// 메일 입력 모달 닫기
+function closeEmailInputModal() {
+    document.getElementById('emailInputModal').style.display = 'none';
+}
+
+// 메일 입력란 추가
+function addEmailInput(value = '') {
+    const emailInputs = document.getElementById('emailInputs');
+    const emailCount = emailInputs.children.length;
+    
+    if (emailCount >= 3) {
+        alert('메일 주소는 최대 3개까지 입력할 수 있습니다.');
+        return;
+    }
+    
+    const emailRow = document.createElement('div');
+    emailRow.className = 'email-input-row';
+    
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    emailInput.className = 'email-input';
+    emailInput.placeholder = `example${emailCount + 1}@email.com`;
+    emailInput.value = value;
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '삭제';
+    removeBtn.onclick = function() { removeEmailInput(this); };
+    
+    // 첫 번째 입력란은 삭제 버튼 숨기기
+    if (emailCount === 0) {
+        removeBtn.style.display = 'none';
+    }
+    
+    emailRow.appendChild(emailInput);
+    emailRow.appendChild(removeBtn);
+    emailInputs.appendChild(emailRow);
+    
+    updateEmailAddButton();
+}
+
+// 메일 입력란 제거
+function removeEmailInput(button) {
+    const emailRow = button.parentElement;
+    const emailInputs = document.getElementById('emailInputs');
+    
+    emailRow.remove();
+    
+    // 남은 입력란들의 삭제 버튼 상태 업데이트
+    const remainingRows = emailInputs.children;
+    if (remainingRows.length === 1) {
+        remainingRows[0].querySelector('.remove-btn').style.display = 'none';
+    }
+    
+    updateEmailAddButton();
+}
+
+// 메일 추가 버튼 상태 업데이트
+function updateEmailAddButton() {
+    const addBtn = document.getElementById('addEmailBtn');
+    const emailCount = document.getElementById('emailInputs').children.length;
+    
+    if (emailCount >= 3) {
+        addBtn.disabled = true;
+        addBtn.textContent = '최대 3개까지 입력 가능';
+    } else {
+        addBtn.disabled = false;
+        addBtn.textContent = '+ 메일 주소 추가';
+    }
+}
+
+// 메일 주소들 저장
+function saveEmailAddresses() {
+    const emailInputs = document.querySelectorAll('.email-input');
+    const emails = [];
+    
+    emailInputs.forEach(input => {
+        const email = input.value.trim();
+        if (email && isValidEmail(email)) {
+            emails.push(email);
+        }
+    });
+    
+    if (emails.length === 0) {
+        alert('유효한 메일 주소를 하나 이상 입력해주세요.');
+        return;
+    }
+    
+    // localStorage에 저장
+    localStorage.setItem('savedEmailAddresses', JSON.stringify(emails));
+    
+    alert(`✅ ${emails.length}개의 메일 주소가 저장되었습니다:\n\n${emails.join('\n')}`);
+    closeEmailInputModal();
+    displaySavedInputs(); // 저장 후 표시
+}
+
+// 폰번호 입력 모달 표시
+function showPhoneInputModal() {
+    const modal = document.getElementById('phoneInputModal');
+    const phoneInputs = document.getElementById('phoneInputs');
+    
+    // 기존 저장된 폰번호들 불러오기
+    const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+    
+    // 기존 입력란들 제거
+    phoneInputs.innerHTML = '';
+    
+    // 저장된 폰번호들로 입력란 생성
+    if (savedPhones.length > 0) {
+        savedPhones.forEach((phone, index) => {
+            addPhoneInput(phone);
+        });
+    } else {
+        // 빈 입력란 하나 생성
+        addPhoneInput();
+    }
+    
+    modal.style.display = 'block';
+    updatePhoneAddButton();
+}
+
+// 폰번호 입력 모달 닫기
+function closePhoneInputModal() {
+    document.getElementById('phoneInputModal').style.display = 'none';
+}
+
+// 폰번호 입력란 추가
+function addPhoneInput(value = '') {
+    const phoneInputs = document.getElementById('phoneInputs');
+    const phoneCount = phoneInputs.children.length;
+    
+    if (phoneCount >= 3) {
+        alert('폰번호는 최대 3개까지 입력할 수 있습니다.');
+        return;
+    }
+    
+    const phoneRow = document.createElement('div');
+    phoneRow.className = 'phone-input-row';
+    
+    const phoneInput = document.createElement('input');
+    phoneInput.type = 'tel';
+    phoneInput.className = 'phone-input';
+    phoneInput.placeholder = `010-1234-567${phoneCount + 1}`;
+    phoneInput.value = value;
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '삭제';
+    removeBtn.onclick = function() { removePhoneInput(this); };
+    
+    // 첫 번째 입력란은 삭제 버튼 숨기기
+    if (phoneCount === 0) {
+        removeBtn.style.display = 'none';
+    }
+    
+    phoneRow.appendChild(phoneInput);
+    phoneRow.appendChild(removeBtn);
+    phoneInputs.appendChild(phoneRow);
+    
+    updatePhoneAddButton();
+}
+
+// 폰번호 입력란 제거
+function removePhoneInput(button) {
+    const phoneRow = button.parentElement;
+    const phoneInputs = document.getElementById('phoneInputs');
+    
+    phoneRow.remove();
+    
+    // 남은 입력란들의 삭제 버튼 상태 업데이트
+    const remainingRows = phoneInputs.children;
+    if (remainingRows.length === 1) {
+        remainingRows[0].querySelector('.remove-btn').style.display = 'none';
+    }
+    
+    updatePhoneAddButton();
+}
+
+// 폰번호 추가 버튼 상태 업데이트
+function updatePhoneAddButton() {
+    const addBtn = document.getElementById('addPhoneBtn');
+    const phoneCount = document.getElementById('phoneInputs').children.length;
+    
+    if (phoneCount >= 3) {
+        addBtn.disabled = true;
+        addBtn.textContent = '최대 3개까지 입력 가능';
+    } else {
+        addBtn.disabled = false;
+        addBtn.textContent = '+ 폰번호 추가';
+    }
+}
+
+// 폰번호들 저장
+function savePhoneNumbers() {
+    const phoneInputs = document.querySelectorAll('.phone-input');
+    const phones = [];
+    
+    phoneInputs.forEach(input => {
+        const phone = input.value.trim();
+        if (phone && isValidPhone(phone)) {
+            phones.push(phone);
+        }
+    });
+    
+    if (phones.length === 0) {
+        alert('유효한 폰번호를 하나 이상 입력해주세요.');
+        return;
+    }
+    
+    // localStorage에 저장
+    localStorage.setItem('savedPhoneNumbers', JSON.stringify(phones));
+    
+    alert(`✅ ${phones.length}개의 폰번호가 저장되었습니다:\n\n${phones.join('\n')}`);
+    closePhoneInputModal();
+    displaySavedInputs(); // 저장 후 표시
+}
+
+// 이메일 유효성 검사
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+// 폰번호 유효성 검사
+function isValidPhone(phone) {
+    const phoneRegex = /^01[0-9]-?\d{3,4}-?\d{4}$/;
+    return phoneRegex.test(phone.replace(/-/g, ''));
+}
+
+// QR 코드 삭제
+function deleteQR() {
+    if (confirm('생성된 QR 코드를 삭제하시겠습니까?')) {
+        const qrSection = document.getElementById('qrSection');
+        const qrCodeContainer = document.getElementById('qrcode');
+        const qrGenerateBtn = document.getElementById('qrGenerateBtn');
+        const qrDeleteBtn = document.getElementById('qrDeleteBtn');
+        
+        // QR 코드 섹션 숨기기
+        qrSection.style.display = 'none';
+        
+        // QR 코드 내용 삭제
+        qrCodeContainer.innerHTML = '';
+        
+        // 버튼 상태 변경
+        qrGenerateBtn.style.display = 'inline-block';
+        qrDeleteBtn.style.display = 'none';
+        
+        // localStorage에서 QR 코드 데이터 삭제
+        localStorage.removeItem('currentQRDataURL');
+        
+        alert('QR 코드가 삭제되었습니다.');
+    }
+}
+
+// ===== 제목 편집 기능 =====
+
+// 제목 편집 모드
+function editTitle() {
+    const titleElement = document.getElementById('mainTitle');
+    const currentTitle = titleElement.textContent;
+    
+    // 편집 모드로 변경 (입력란만 표시)
+    titleElement.innerHTML = `
+        <input type="text" id="titleInput" value="${currentTitle}" 
+               style="background: transparent; color: white; border: 2px solid rgba(255,255,255,0.5); 
+                      border-radius: 5px; padding: 5px 10px; font-size: 1.6rem; font-weight: 600; 
+                      width: 100%; text-align: center; outline: none;">
+    `;
+    
+    // 입력란에 포커스
+    const titleInput = document.getElementById('titleInput');
+    titleInput.focus();
+    titleInput.select();
+    
+    // Enter 키로 저장, Esc 키로 취소
+    titleInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            saveTitle();
+        } else if (e.key === 'Escape') {
+            cancelTitleEdit();
+        }
+    });
+    
+    // 입력란에서 포커스가 벗어나면 자동 저장
+    titleInput.addEventListener('blur', function() {
+        saveTitle();
+    });
+}
+
+// 제목 저장
+function saveTitle() {
+    const titleInput = document.getElementById('titleInput');
+    const newTitle = titleInput.value.trim();
+    
+    if (!newTitle) {
+        alert('제목을 입력해주세요.');
+        return;
+    }
+    
+    // localStorage에 저장
+    localStorage.setItem('mainTitle', newTitle);
+    
+    // 제목 업데이트 및 편집 모드 해제
+    const titleElement = document.getElementById('mainTitle');
+    titleElement.innerHTML = newTitle;
+    titleElement.onclick = editTitle;
+    
+    alert('제목이 저장되었습니다!');
+}
+
+// 제목 편집 취소
+function cancelTitleEdit() {
+    const titleElement = document.getElementById('mainTitle');
+    const savedTitle = localStorage.getItem('mainTitle') || '📡 구포현대아파트 통신 환경 개선 신청서';
+    
+    // 편집 모드 해제하고 원래 상태로 복원
+    titleElement.innerHTML = savedTitle;
+    titleElement.onclick = editTitle;
+}
+
+// 부제목 편집 모드
+function editSubtitle() {
+    const subtitleElement = document.getElementById('mainSubtitle');
+    const currentSubtitle = subtitleElement.textContent;
+    
+    // 편집 모드로 변경 (입력란만 표시)
+    subtitleElement.innerHTML = `
+        <input type="text" id="subtitleInput" value="${currentSubtitle}" 
+               style="background: transparent; color: white; border: 2px solid rgba(255,255,255,0.5); 
+                      border-radius: 5px; padding: 5px 10px; font-size: 1.1rem; 
+                      width: 100%; text-align: center; outline: none;">
+    `;
+    
+    // 입력란에 포커스
+    const subtitleInput = document.getElementById('subtitleInput');
+    subtitleInput.focus();
+    subtitleInput.select();
+    
+    // Enter 키로 저장, Esc 키로 취소
+    subtitleInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            saveSubtitle();
+        } else if (e.key === 'Escape') {
+            cancelSubtitleEdit();
+        }
+    });
+    
+    // 입력란에서 포커스가 벗어나면 자동 저장
+    subtitleInput.addEventListener('blur', function() {
+        saveSubtitle();
+    });
+}
+
+// 부제목 저장
+function saveSubtitle() {
+    const subtitleInput = document.getElementById('subtitleInput');
+    const newSubtitle = subtitleInput.value.trim();
+    
+    if (!newSubtitle) {
+        alert('부제목을 입력해주세요.');
+        return;
+    }
+    
+    // localStorage에 저장
+    localStorage.setItem('mainSubtitle', newSubtitle);
+    
+    // 부제목 업데이트 및 편집 모드 해제
+    const subtitleElement = document.getElementById('mainSubtitle');
+    subtitleElement.innerHTML = newSubtitle;
+    subtitleElement.onclick = editSubtitle;
+    
+    alert('부제목이 저장되었습니다!');
+}
+
+// 부제목 편집 취소
+function cancelSubtitleEdit() {
+    const subtitleElement = document.getElementById('mainSubtitle');
+    const savedSubtitle = localStorage.getItem('mainSubtitle') || '통신 환경 개선을 위한 신청서를 작성해주세요';
+    
+    // 편집 모드 해제하고 원래 상태로 복원
+    subtitleElement.innerHTML = savedSubtitle;
+    subtitleElement.onclick = editSubtitle;
+}
+
+// 페이지 로드시 저장된 제목/부제목 불러오기
+function loadSavedTitles() {
+    const savedTitle = localStorage.getItem('mainTitle');
+    const savedSubtitle = localStorage.getItem('mainSubtitle');
+    
+    if (savedTitle) {
+        const titleElement = document.getElementById('mainTitle');
+        titleElement.textContent = savedTitle;
+    }
+    
+    if (savedSubtitle) {
+        const subtitleElement = document.getElementById('mainSubtitle');
+        subtitleElement.textContent = savedSubtitle;
+    }
+}
+
+// 저장된 메일/폰번호 표시
+function displaySavedInputs() {
+    const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+    const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+    
+    const emailDisplay = document.getElementById('emailDisplay');
+    const phoneDisplay = document.getElementById('phoneDisplay');
+    
+    // 메일 주소 표시
+    if (savedEmails.length > 0) {
+        if (savedEmails.length === 1) {
+            emailDisplay.textContent = savedEmails[0];
+        } else {
+            emailDisplay.textContent = `${savedEmails[0]} 외 ${savedEmails.length - 1}개`;
+        }
+        emailDisplay.classList.add('has-content');
+        emailDisplay.title = `저장된 메일 주소:\n${savedEmails.join('\n')}`;
+    } else {
+        emailDisplay.textContent = '';
+        emailDisplay.classList.remove('has-content');
+        emailDisplay.title = '';
+    }
+    
+    // 폰번호 표시
+    if (savedPhones.length > 0) {
+        if (savedPhones.length === 1) {
+            phoneDisplay.textContent = savedPhones[0];
+        } else {
+            phoneDisplay.textContent = `${savedPhones[0]} 외 ${savedPhones.length - 1}개`;
+        }
+        phoneDisplay.classList.add('has-content');
+        phoneDisplay.title = `저장된 폰번호:\n${savedPhones.join('\n')}`;
+    } else {
+        phoneDisplay.textContent = '';
+        phoneDisplay.classList.remove('has-content');
+        phoneDisplay.title = '';
+    }
+}
