@@ -28,6 +28,19 @@ function formatDate(dateString) {
     }
 }
 
+// 휴대폰 번호 포맷팅 (하이픈 추가)
+function formatPhoneNumber(raw) {
+    if (!raw) return '미입력';
+    const digits = String(raw).replace(/\D/g, '');
+    if (digits.length === 11) {
+        return `${digits.slice(0,3)}-${digits.slice(3,7)}-${digits.slice(7)}`;
+    }
+    if (digits.length === 10) {
+        return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`;
+    }
+    return raw;
+}
+
 // SMS 발송 (Twilio API 연동 예시)
 export async function sendSMS(phoneNumber, message) {
     try {
@@ -113,7 +126,9 @@ export async function sendApplicationNotification(applicationData, adminSettings
         
         // 이메일 알림 발송
         if (adminSettings.emails && adminSettings.emails.length > 0) {
-            const emailSubject = '🔔 새 신청서 접수 알림';
+            const headerTitle = adminSettings.title || '구포현대아파트 통신 환경 개선 신청서';
+            const headerSubtitle = adminSettings.subtitle || '새로운 신청서가 접수되었습니다';
+            const emailSubject = `🔔 새 신청서 접수 - ${applicationData.name || '무명'} (${getWorkTypeDisplay(applicationData.workType)})`;
             const emailMessage = `
 <!DOCTYPE html>
 <html>
@@ -131,23 +146,23 @@ export async function sendApplicationNotification(applicationData, adminSettings
 </head>
 <body>
     <div class="header">
-        <h1>📡 구포현대아파트 통신 환경 개선 신청서</h1>
-        <p>새로운 신청서가 접수되었습니다</p>
+        <h1>📡 ${headerTitle}</h1>
+        <p>${headerSubtitle}</p>
     </div>
     
     <div class="content">
         <div class="form-group">
-            <div class="label">공사요청 : 동 / 호수 *</div>
+            <div class="label">공사요청 : 동 / 호수</div>
             <div class="value">${applicationData.name || '미입력'}</div>
         </div>
         
         <div class="form-group">
-            <div class="label">연락처 *</div>
-            <div class="value">${applicationData.phone || '미입력'}</div>
+            <div class="label">연락처</div>
+            <div class="value">${formatPhoneNumber(applicationData.phone)}</div>
         </div>
         
         <div class="form-group">
-            <div class="label">현재 사용 중인 인터넷 통신사 *</div>
+            <div class="label">현재 사용 중인 인터넷 통신사</div>
             <div class="value">${getWorkTypeDisplay(applicationData.workType)}</div>
         </div>
         
