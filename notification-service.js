@@ -28,13 +28,9 @@ function formatDate(dateString) {
     }
 }
 
-// 태그 제거 (text/plain 생성용)
-function stripTags(html) {
-    if (!html) return '';
-    return String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-}
 
-// 인라인 스타일 HTML 템플릿 구성 (메일 클라이언트 호환성 강화)
+
+// 완전히 텍스트만 사용하는 이메일 내용 구성
 function buildEmailHtml(applicationData, adminSettings) {
     const headerTitle = adminSettings.title || '구포현대아파트 통신 환경 개선 신청서';
     const headerSubtitle = adminSettings.subtitle || '새로운 신청서가 접수되었습니다';
@@ -44,45 +40,22 @@ function buildEmailHtml(applicationData, adminSettings) {
     const startDate = formatDate(applicationData.startDate);
     const description = applicationData.description || '내용 없음';
     const submitted = new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR');
-    return `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family:Arial, sans-serif; line-height:1.6; color:#333; margin:0; padding:0; background:#ffffff;">
-  <div style="background:#4CAF50; color:#ffffff; padding:20px; text-align:center; border-radius:8px 8px 0 0;">
-    <h1 style="margin:0; font-size:20px;">📡 ${headerTitle}</h1>
-    <p style="margin:8px 0 0 0; font-size:14px;">${headerSubtitle}</p>
-  </div>
-  <div style="background:#f9f9f9; padding:20px; border-radius:0 0 8px 8px;">
-    <div style="margin-bottom:15px;">
-      <div style="font-weight:bold; color:#555; margin-bottom:5px;">공사요청 : 동 / 호수</div>
-      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${name}</div>
-    </div>
-    <div style="margin-bottom:15px;">
-      <div style="font-weight:bold; color:#555; margin-bottom:5px;">연락처</div>
-      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${phone}</div>
-    </div>
-    <div style="margin-bottom:15px;">
-      <div style="font-weight:bold; color:#555; margin-bottom:5px;">현재 사용 중인 인터넷 통신사</div>
-      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${workType}</div>
-    </div>
-    <div style="margin-bottom:15px;">
-      <div style="font-weight:bold; color:#555; margin-bottom:5px;">공사 희망일</div>
-      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${startDate}</div>
-    </div>
-    <div style="margin-bottom:15px;">
-      <div style="font-weight:bold; color:#555; margin-bottom:5px;">상세 요청사항</div>
-      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px; white-space:pre-wrap;">${description}</div>
-    </div>
-    <div style="margin-bottom:15px;">
-      <div style="font-weight:bold; color:#555; margin-bottom:5px;">개인정보 수집 및 이용 동의</div>
-      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">✅ 동의함</div>
-    </div>
-  </div>
-  <div style="margin:20px; padding:15px; background:#e8f5e8; border-radius:4px; text-align:center;">
-    <strong>접수 시간:</strong> ${submitted}
-  </div>
-</body>
-</html>`;
+    
+    return `
+🔔 새 신청서 접수 알림
+
+${headerTitle}
+${headerSubtitle}
+
+공사요청 : ${name}
+연락처 : ${phone}
+사용 중인 통신사 : ${workType}
+공사 희망일 : ${startDate}
+상세 요청사항 : ${description}
+신청 일시 : ${submitted}
+
+담당자가 빠른 시일 내에 연락드리겠습니다.
+    `.trim();
 }
 // 휴대폰 번호 포맷팅 (하이픈 추가)
 function formatPhoneNumber(raw) {
@@ -183,12 +156,11 @@ export async function sendApplicationNotification(applicationData, adminSettings
         // 이메일 알림 발송
         if (adminSettings.emails && adminSettings.emails.length > 0) {
             const emailSubject = `🔔 새 신청서 접수 - ${applicationData.name || '무명'} (${getWorkTypeDisplay(applicationData.workType)})`;
-            const emailHtml = buildEmailHtml(applicationData, adminSettings);
-            const emailText = stripTags(emailHtml);
+            const emailContent = buildEmailHtml(applicationData, adminSettings);
             
             for (const email of adminSettings.emails) {
                 if (email && email.trim()) {
-                    const result = await sendEmail(email.trim(), emailSubject, emailHtml, emailText);
+                    const result = await sendEmail(email.trim(), emailSubject, emailContent, emailContent);
                     results.email.push({ email, success: result.success });
                 }
             }
