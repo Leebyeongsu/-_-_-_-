@@ -1,6 +1,32 @@
 // 알림 서비스 (SMS, 이메일)
 import { saveNotificationLog } from './supabase-api.js';
-import { functionsBaseUrl } from './supabase-config.js';
+import { supabase } from './supabase-config.js';
+
+// 통신사 표시 변환 함수 (메일 본문 구성용)
+function getWorkTypeDisplay(workType) {
+    const workTypeMap = {
+        'interior': 'KT',
+        'exterior': 'SKT',
+        'plumbing': 'LGU+',
+        'electrical': '기타(지역방송)'
+    };
+    return workTypeMap[workType] || workType || '미입력';
+}
+
+// 날짜 포맷 함수 (메일 본문 구성용)
+function formatDate(dateString) {
+    if (!dateString) return '미입력';
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    } catch (_) {
+        return dateString;
+    }
+}
 
 // SMS 발송 (Twilio API 연동 예시)
 export async function sendSMS(phoneNumber, message) {
@@ -38,32 +64,27 @@ export async function sendSMS(phoneNumber, message) {
     }
 }
 
-// 이메일 발송 (Supabase Edge Function 연동 예시)
-export async function sendEmail(emailAddress, subject, message) {
+// 이메일 발송 (Supabase Edge Function 호출 - SDK 사용)
+export async function sendEmail(emailAddress, subject, html) {
     try {
-        const response = await fetch(`${functionsBaseUrl}/send-email`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: emailAddress, subject, text: message })
+        const { data, error } = await supabase.functions.invoke('send-email', {
+            body: { to: emailAddress, subject, html }
         });
-
-        const ok = response.ok;
-        const result = ok ? await response.json().catch(() => ({})) : await response.text().catch(() => '');
 
         await saveNotificationLog({
             notification_type: 'email',
             recipient: emailAddress,
-            message: `${subject}: ${message}`,
-            status: ok ? 'sent' : 'failed'
+            message: subject,
+            status: error ? 'failed' : 'sent'
         });
 
-        return { success: ok, result };
+        return { success: !error, result: data, error };
     } catch (error) {
         console.error('이메일 발송 실패:', error);
         await saveNotificationLog({
             notification_type: 'email',
             recipient: emailAddress,
-            message: `${subject}: ${message}`,
+            message: subject,
             status: 'failed'
         });
         return { success: false, error: error.message };
