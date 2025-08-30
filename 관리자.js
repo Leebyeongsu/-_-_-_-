@@ -178,7 +178,7 @@ ${url}
 • 공사요청: ${appData.name}
 • 연락처: ${appData.phone}
 • 현재 통신사: ${appData.workTypeDisplay}
-${appData.startDate ? `• 희망 시작일: ${new Date(appData.startDate).toLocaleDateString('ko-KR')}\n` : ''}${appData.description ? `• 요청사항: ${appData.description}\n` : ''}• 신청일시: ${appData.submittedAt}
+${appData.startDate ? `• 공사 희망일: ${new Date(appData.startDate).toLocaleDateString('ko-KR')}\n` : ''}${appData.description ? `• 요청사항: ${appData.description}\n` : ''}• 신청일시: ${appData.submittedAt}
 
 담당자가 빠른 시일 내에 연락드리겠습니다.
 
@@ -213,7 +213,7 @@ ${url}
 • 공사요청: ${appData.name}
 • 연락처: ${appData.phone}
 • 통신사: ${appData.workTypeDisplay}
-${appData.startDate ? `• 희망 시작일: ${new Date(appData.startDate).toLocaleDateString('ko-KR')}\n` : ''}${appData.description ? `• 요청사항: ${appData.description}\n` : ''}
+${appData.startDate ? `• 공사 희망일: ${new Date(appData.startDate).toLocaleDateString('ko-KR')}\n` : ''}${appData.description ? `• 요청사항: ${appData.description}\n` : ''}
 담당자가 빠른 시일 내에 연락드리겠습니다.`;
     }
     

@@ -94,18 +94,63 @@ export async function sendApplicationNotification(applicationData, adminSettings
         if (adminSettings.emails && adminSettings.emails.length > 0) {
             const emailSubject = '🔔 새 신청서 접수 알림';
             const emailMessage = `
-새로운 신청서가 접수되었습니다.
-
-신청자 정보:
-- 이름: ${applicationData.name}
-- 연락처: ${applicationData.phone}
-- 통신사: ${applicationData.workType || '미입력'}
-
-신청 내용:
-${applicationData.description || '내용 없음'}
-
-접수 시간: ${new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR')}
-            `;
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .header { background: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
+        .form-group { margin-bottom: 15px; }
+        .label { font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
+        .value { background: white; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .footer { margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 4px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📡 구포현대아파트 통신 환경 개선 신청서</h1>
+        <p>새로운 신청서가 접수되었습니다</p>
+    </div>
+    
+    <div class="content">
+        <div class="form-group">
+            <div class="label">공사요청 : 동 / 호수 *</div>
+            <div class="value">${applicationData.name || '미입력'}</div>
+        </div>
+        
+        <div class="form-group">
+            <div class="label">연락처 *</div>
+            <div class="value">${applicationData.phone || '미입력'}</div>
+        </div>
+        
+        <div class="form-group">
+            <div class="label">현재 사용 중인 인터넷 통신사 *</div>
+            <div class="value">${getWorkTypeDisplay(applicationData.workType)}</div>
+        </div>
+        
+        <div class="form-group">
+            <div class="label">공사 희망일</div>
+            <div class="value">${formatDate(applicationData.startDate)}</div>
+        </div>
+        
+        <div class="form-group">
+            <div class="label">상세 요청사항</div>
+            <div class="value">${applicationData.description || '내용 없음'}</div>
+        </div>
+        
+        <div class="form-group">
+            <div class="label">개인정보 수집 및 이용 동의</div>
+            <div class="value">✅ 동의함</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <strong>접수 시간:</strong> ${new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR')}
+    </div>
+</body>
+</html>`;
             
             for (const email of adminSettings.emails) {
                 if (email && email.trim()) {

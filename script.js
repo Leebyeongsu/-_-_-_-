@@ -97,10 +97,21 @@ async function processCustomerFormSubmission(event) {
         }
         
         // 성공 메시지 표시
-        alert('✅ 신청서가 성공적으로 제출되었습니다!\n\n관리자에게 알림이 발송되었습니다.');
+        alert('✅ 신청서가 성공적으로 제출되었습니다!\n\n관리자에게 알림이 발송되었습니다.\n\n3초 후 웹페이지가 종료됩니다.');
         
         // 폼 초기화
         event.target.reset();
+        
+        // 3초 후 웹 종료
+        setTimeout(() => {
+            if (confirm('신청서 제출이 완료되었습니다.\n\n웹페이지를 종료하시겠습니까?')) {
+                window.close();
+                // window.close()가 작동하지 않는 경우 (팝업이 아닌 경우)
+                if (!window.closed) {
+                    alert('웹페이지를 수동으로 닫아주세요.');
+                }
+            }
+        }, 3000);
         
         // 결과 페이지로 이동
         showResult();
