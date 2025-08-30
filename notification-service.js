@@ -28,6 +28,62 @@ function formatDate(dateString) {
     }
 }
 
+// 태그 제거 (text/plain 생성용)
+function stripTags(html) {
+    if (!html) return '';
+    return String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// 인라인 스타일 HTML 템플릿 구성 (메일 클라이언트 호환성 강화)
+function buildEmailHtml(applicationData, adminSettings) {
+    const headerTitle = adminSettings.title || '구포현대아파트 통신 환경 개선 신청서';
+    const headerSubtitle = adminSettings.subtitle || '새로운 신청서가 접수되었습니다';
+    const name = applicationData.name || '미입력';
+    const phone = formatPhoneNumber(applicationData.phone);
+    const workType = getWorkTypeDisplay(applicationData.workType);
+    const startDate = formatDate(applicationData.startDate);
+    const description = applicationData.description || '내용 없음';
+    const submitted = new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR');
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial, sans-serif; line-height:1.6; color:#333; margin:0; padding:0; background:#ffffff;">
+  <div style="background:#4CAF50; color:#ffffff; padding:20px; text-align:center; border-radius:8px 8px 0 0;">
+    <h1 style="margin:0; font-size:20px;">📡 ${headerTitle}</h1>
+    <p style="margin:8px 0 0 0; font-size:14px;">${headerSubtitle}</p>
+  </div>
+  <div style="background:#f9f9f9; padding:20px; border-radius:0 0 8px 8px;">
+    <div style="margin-bottom:15px;">
+      <div style="font-weight:bold; color:#555; margin-bottom:5px;">공사요청 : 동 / 호수</div>
+      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${name}</div>
+    </div>
+    <div style="margin-bottom:15px;">
+      <div style="font-weight:bold; color:#555; margin-bottom:5px;">연락처</div>
+      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${phone}</div>
+    </div>
+    <div style="margin-bottom:15px;">
+      <div style="font-weight:bold; color:#555; margin-bottom:5px;">현재 사용 중인 인터넷 통신사</div>
+      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${workType}</div>
+    </div>
+    <div style="margin-bottom:15px;">
+      <div style="font-weight:bold; color:#555; margin-bottom:5px;">공사 희망일</div>
+      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">${startDate}</div>
+    </div>
+    <div style="margin-bottom:15px;">
+      <div style="font-weight:bold; color:#555; margin-bottom:5px;">상세 요청사항</div>
+      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px; white-space:pre-wrap;">${description}</div>
+    </div>
+    <div style="margin-bottom:15px;">
+      <div style="font-weight:bold; color:#555; margin-bottom:5px;">개인정보 수집 및 이용 동의</div>
+      <div style="background:#fff; padding:10px; border:1px solid #ddd; border-radius:4px;">✅ 동의함</div>
+    </div>
+  </div>
+  <div style="margin:20px; padding:15px; background:#e8f5e8; border-radius:4px; text-align:center;">
+    <strong>접수 시간:</strong> ${submitted}
+  </div>
+</body>
+</html>`;
+}
 // 휴대폰 번호 포맷팅 (하이픈 추가)
 function formatPhoneNumber(raw) {
     if (!raw) return '미입력';
@@ -78,10 +134,10 @@ export async function sendSMS(phoneNumber, message) {
 }
 
 // 이메일 발송 (Supabase Edge Function 호출 - SDK 사용)
-export async function sendEmail(emailAddress, subject, html) {
+export async function sendEmail(emailAddress, subject, html, textFallback) {
     try {
         const { data, error } = await supabase.functions.invoke('send-email', {
-            body: { to: emailAddress, subject, html }
+            body: { to: emailAddress, subject, html, text: textFallback }
         });
 
         await saveNotificationLog({
@@ -126,71 +182,13 @@ export async function sendApplicationNotification(applicationData, adminSettings
         
         // 이메일 알림 발송
         if (adminSettings.emails && adminSettings.emails.length > 0) {
-            const headerTitle = adminSettings.title || '구포현대아파트 통신 환경 개선 신청서';
-            const headerSubtitle = adminSettings.subtitle || '새로운 신청서가 접수되었습니다';
             const emailSubject = `🔔 새 신청서 접수 - ${applicationData.name || '무명'} (${getWorkTypeDisplay(applicationData.workType)})`;
-            const emailMessage = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .header { background: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-        .content { background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
-        .form-group { margin-bottom: 15px; }
-        .label { font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
-        .value { background: white; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-        .footer { margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 4px; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📡 ${headerTitle}</h1>
-        <p>${headerSubtitle}</p>
-    </div>
-    
-    <div class="content">
-        <div class="form-group">
-            <div class="label">공사요청 : 동 / 호수</div>
-            <div class="value">${applicationData.name || '미입력'}</div>
-        </div>
-        
-        <div class="form-group">
-            <div class="label">연락처</div>
-            <div class="value">${formatPhoneNumber(applicationData.phone)}</div>
-        </div>
-        
-        <div class="form-group">
-            <div class="label">현재 사용 중인 인터넷 통신사</div>
-            <div class="value">${getWorkTypeDisplay(applicationData.workType)}</div>
-        </div>
-        
-        <div class="form-group">
-            <div class="label">공사 희망일</div>
-            <div class="value">${formatDate(applicationData.startDate)}</div>
-        </div>
-        
-        <div class="form-group">
-            <div class="label">상세 요청사항</div>
-            <div class="value">${applicationData.description || '내용 없음'}</div>
-        </div>
-        
-        <div class="form-group">
-            <div class="label">개인정보 수집 및 이용 동의</div>
-            <div class="value">✅ 동의함</div>
-        </div>
-    </div>
-    
-    <div class="footer">
-        <strong>접수 시간:</strong> ${new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR')}
-    </div>
-</body>
-</html>`;
+            const emailHtml = buildEmailHtml(applicationData, adminSettings);
+            const emailText = stripTags(emailHtml);
             
             for (const email of adminSettings.emails) {
                 if (email && email.trim()) {
-                    const result = await sendEmail(email.trim(), emailSubject, emailMessage);
+                    const result = await sendEmail(email.trim(), emailSubject, emailHtml, emailText);
                     results.email.push({ email, success: result.success });
                 }
             }
