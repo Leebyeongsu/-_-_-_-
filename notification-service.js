@@ -42,8 +42,6 @@ function buildEmailHtml(applicationData, adminSettings) {
     const submitted = new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR');
     
     return `
-🔔 새 신청서 접수 알림
-
 ${headerTitle}
 ${headerSubtitle}
 
@@ -54,7 +52,7 @@ ${headerSubtitle}
 상세 요청사항 : ${description}
 신청 일시 : ${submitted}
 
-담당자가 빠른 시일 내에 연락드리겠습니다.
+담당자가 빠른 시일 내에 연락드리겠습니다
     `.trim();
 }
 // 휴대폰 번호 포맷팅 (하이픈 추가)
