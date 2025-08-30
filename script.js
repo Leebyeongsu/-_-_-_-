@@ -131,16 +131,23 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 관리자에게 SMS 전송
     function sendSMSToAdmin(applicationData) {
+        console.log('=== SMS 전송 디버깅 ===');
+        console.log('localStorage 전체 내용:', localStorage);
+        
         const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+        console.log('저장된 전화번호:', savedPhones);
+        console.log('전화번호 개수:', savedPhones.length);
         
         if (savedPhones.length === 0) {
             console.warn('관리자 전화번호가 설정되지 않았습니다.');
+            console.log('사용 가능한 localStorage 키들:', Object.keys(localStorage));
             alert('⚠️ 관리자 전화번호가 설정되지 않았습니다.\n관리자에게 문의해주세요.');
             return;
         }
         
         // 첫 번째 전화번호로 SMS 전송
         const adminPhone = savedPhones[0];
+        console.log('사용할 관리자 전화번호:', adminPhone);
         
         // SMS 내용 구성
         const smsContent = `🔔 공사 신청서 접수\n\n📝 신청자: ${applicationData.name}\n📱 연락처: ${applicationData.phone}\n🏠 주소: ${applicationData.address}\n🏗️ 공사종류: ${applicationData.workTypeDisplay}\n💰 예산: ${applicationData.budgetDisplay}\n📋 요청사항: ${applicationData.request}\n⏰ 접수시간: ${applicationData.submittedAt}\n🔢 신청번호: ${applicationData.applicationNumber}`;
