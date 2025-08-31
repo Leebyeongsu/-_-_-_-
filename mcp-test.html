@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP 연동 테스트 - 공사 신청서</title>
+    <!-- Supabase CDN 직접 포함 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status-card {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .error-card {
+            background: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #1976d2;
+        }
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .debug-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 MCP 연동 테스트 - 공사 신청서</h1>
+    
+    <!-- 디버그 정보 -->
+    <div class="container">
+        <h2>🐛 디버그 정보</h2>
+        <div id="debugInfo" class="debug-info">
+            <p>페이지 로딩 상태: <span id="pageStatus">로딩 중...</span></p>
+            <p>Supabase 상태: <span id="supabaseStatus">확인 중...</span></p>
+            <p>MCP 클라이언트 상태: <span id="mcpStatus">확인 중...</span></p>
+            <p>전역 함수 상태: <span id="functionStatus">확인 중...</span></p>
+        </div>
+        <button class="button" onclick="showDebugInfo()">디버그 정보 새로고침</button>
+    </div>
+    
+    <!-- 연결 상태 -->
+    <div class="container">
+        <h2>연결 상태</h2>
+        <div id="connectionStatus" class="status-card">
+            <p>연결 확인 중...</p>
+        </div>
+        <button class="button" onclick="checkConnection()">연결 상태 확인</button>
+        <button class="button" onclick="testDirectConnection()">직접 연결 테스트</button>
+    </div>
+
+    <!-- MCP 기능 테스트 -->
+    <div class="grid">
+        <!-- 데이터베이스 스키마 정보 -->
+        <div class="container">
+            <h2>📊 데이터베이스 스키마</h2>
+            <button class="button" onclick="getSchemaInfo()">스키마 정보 조회</button>
+            <div id="schemaResult" class="result-area"></div>
+        </div>
+
+        <!-- 테이블 데이터 조회 -->
+        <div class="container">
+            <h2>📋 테이블 데이터 조회</h2>
+            <div class="form-group">
+                <label>테이블명:</label>
+                <input type="text" id="tableName" value="applications" placeholder="테이블명 입력">
+            </div>
+            <div class="form-group">
+                <label>조회 개수:</label>
+                <input type="number" id="limitCount" value="10" min="1" max="100">
+            </div>
+            <button class="button" onclick="getTableData()">데이터 조회</button>
+            <div id="tableDataResult" class="result-area"></div>
+        </div>
+    </div>
+
+    <!-- 데이터 조작 테스트 -->
+    <div class="grid">
+        <!-- 데이터 삽입 -->
+        <div class="container">
+            <h2>➕ 데이터 삽입 테스트</h2>
+            <div class="form-group">
+                <label>테이블명:</label>
+                <input type="text" id="insertTableName" value="applications" placeholder="테이블명 입력">
+            </div>
+            <div class="form-group">
+                <label>JSON 데이터:</label>
+                <textarea id="insertDataInput" rows="4">{"name": "홍길동", "phone": "010-1234-5678", "workType": "interior", "privacy": true, "description": "인터넷 속도 개선 요청"}</textarea>
+            </div>
+            <button class="button" onclick="insertData()">데이터 삽입</button>
+            <div id="insertResult" class="result-area"></div>
+        </div>
+
+        <!-- 데이터 업데이트 -->
+        <div class="container">
+            <h2>✏️ 데이터 업데이트 테스트</h2>
+            <div class="form-group">
+                <label>테이블명:</label>
+                <input type="text" id="updateTableName" value="applications" placeholder="테이블명 입력">
+            </div>
+            <div class="form-group">
+                <label>업데이트 데이터 (JSON):</label>
+                <textarea id="updateDataInput" rows="3">{"name": "수정된 이름", "description": "수정된 설명"}</textarea>
+            </div>
+            <div class="form-group">
+                <label>조건 (JSON):</label>
+                <textarea id="updateConditionsInput" rows="3">{"id": "123e4567-e89b-12d3-a456-426614174000"}</textarea>
+            </div>
+            <button class="button" onclick="fillUpdateCondition()">조건 자동 채우기</button>
+            <button class="button" onclick="updateData()">데이터 업데이트</button>
+            <div id="updateResult" class="result-area"></div>
+        </div>
+    </div>
+
+    <!-- SQL 쿼리 실행 -->
+    <div class="container">
+        <h2>🔍 SQL 쿼리 실행</h2>
+        <div class="form-group">
+            <label>SQL 쿼리:</label>
+            <textarea id="sqlQuery" rows="3" placeholder="SELECT * FROM applications LIMIT 5"></textarea>
+        </div>
+        <button class="button" onclick="executeQuery()">쿼리 실행</button>
+        <div id="queryResult" class="result-area"></div>
+    </div>
+
+    <script>
+        // 전역 변수들
+        let supabase = null;
+        let mcpClient = null;
+        let isLoaded = false;
+        let lastInsertedRow = null; // 마지막 삽입 레코드 캐시
+
+        // 페이지 로딩 상태 업데이트
+        function updatePageStatus(status) {
+            document.getElementById('pageStatus').textContent = status;
+        }
+
+        // Supabase 상태 업데이트
+        function updateSupabaseStatus(status) {
+            document.getElementById('supabaseStatus').textContent = status;
+        }
+
+        // MCP 클라이언트 상태 업데이트
+        function updateMCPStatus(status) {
+            document.getElementById('mcpStatus').textContent = status;
+        }
+
+        // 전역 함수 상태 업데이트
+        function updateFunctionStatus(status) {
+            document.getElementById('functionStatus').textContent = status;
+        }
+
+        // 디버그 정보 표시
+        window.showDebugInfo = function() {
+            updatePageStatus(isLoaded ? '로딩 완료' : '로딩 중');
+            updateSupabaseStatus(supabase ? '초기화됨' : '초기화 안됨');
+            updateMCPStatus(mcpClient ? '초기화됨' : '초기화 안됨');
+            updateFunctionStatus('checkConnection' in window ? '등록됨' : '등록 안됨');
+        };
+
+        // 직접 연결 테스트 (Supabase 클라이언트 없이)
+        window.testDirectConnection = async function() {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.innerHTML = '<p>직접 연결 테스트 중...</p>';
+            
+            try {
+                // Supabase 직접 테스트
+                const response = await fetch('https://boorsqnfkwglzvnhtwcx.supabase.co/rest/v1/admin_settings?select=count&limit=1', {
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2NpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0'
+                    }
+                });
+                
+                if (response.ok) {
+                    statusDiv.className = 'status-card';
+                    statusDiv.innerHTML = `
+                        <h3>✅ 직접 연결 성공</h3>
+                        <p>Supabase API에 직접 연결되었습니다.</p>
+                        <p><strong>상태 코드:</strong> ${response.status}</p>
+                        <p><strong>응답:</strong> ${response.statusText}</p>
+                    `;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                statusDiv.className = 'error-card';
+                statusDiv.innerHTML = `
+                    <h3>❌ 직접 연결 실패</h3>
+                    <p>오류: ${error.message}</p>
+                    <p>이는 MCP 클라이언트 문제가 아닌 네트워크/API 문제일 수 있습니다.</p>
+                `;
+            }
+        };
+
+        // Supabase 클라이언트 초기화
+        async function initializeSupabase() {
+            try {
+                updateSupabaseStatus('Supabase 클라이언트 초기화 중...');
+                
+                // Supabase 설정
+                const supabaseUrl = 'https://boorsqnfkwglzvnhtwcx.supabase.co';
+                const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0';
+                
+                // Supabase 클라이언트 생성
+                supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+                
+                updateSupabaseStatus('Supabase 클라이언트 초기화 완료');
+                return supabase;
+            } catch (error) {
+                console.error('Supabase 클라이언트 초기화 실패:', error);
+                updateSupabaseStatus(`초기화 실패: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // MCP 클라이언트 초기화
+        async function initializeMCP() {
+            try {
+                updateMCPStatus('MCP 클라이언트 초기화 중...');
+                
+                // MCP 클라이언트 클래스 정의
+                class MCPClient {
+                    constructor() {
+                        this.supabase = null;
+                        this.isConnected = false;
+                    }
+
+                    async checkConnection() {
+                        try {
+                            const { data, error } = await this.supabase.from('admin_settings').select('count').limit(1);
+                            this.isConnected = !error;
+                            return { success: !error, error };
+                        } catch (error) {
+                            this.isConnected = false;
+                            return { success: false, error: error.message };
+                        }
+                    }
+
+                    async getSchemaInfo() {
+                        try {
+                            // information_schema 대신 실제 테이블 정보 조회
+                            const tables = ['admin_settings', 'applications', 'notification_logs'];
+                            const schemaInfo = [];
+                            
+                            for (const tableName of tables) {
+                                try {
+                                    const { data, error } = await this.supabase
+                                        .from(tableName)
+                                        .select('*')
+                                        .limit(1);
+                                    
+                                    if (!error) {
+                                        schemaInfo.push({
+                                            table_name: tableName,
+                                            table_type: 'BASE TABLE',
+                                            columns: data.length > 0 ? Object.keys(data[0]) : [],
+                                            row_count: '확인 가능'
+                                        });
+                                    }
+                                } catch (e) {
+                                    schemaInfo.push({
+                                        table_name: tableName,
+                                        table_type: 'BASE TABLE',
+                                        columns: [],
+                                        row_count: '접근 불가'
+                                    });
+                                }
+                            }
+                            
+                            return { success: true, data: schemaInfo };
+                        } catch (error) {
+                            return { success: false, error: error.message };
+                        }
+                    }
+
+                    async getTableData(tableName, limit = 100) {
+                        try {
+                            const { data, error } = await this.supabase
+                                .from(tableName)
+                                .select('*')
+                                .limit(limit);
+
+                            if (error) throw error;
+                            return { success: true, data };
+                        } catch (error) {
+                            return { success: false, error: error.message };
+                        }
+                    }
+
+                    async insertData(tableName, data) {
+                        try {
+                            // 컬럼 추론: 1건 조회하여 컬럼 키 수집 (권한 허용 시)
+                            let allowedColumns = null;
+                            try {
+                                const { data: sampleRows } = await this.supabase
+                                    .from(tableName)
+                                    .select('*')
+                                    .limit(1);
+                                if (sampleRows && sampleRows.length > 0) {
+                                    allowedColumns = Object.keys(sampleRows[0]);
+                                }
+                            } catch (_) {}
+
+                            // 최소 필드만 구성하여 알 수 없는 컬럼으로 인한 400 방지
+                            let insertData = { ...data };
+                            if (tableName === 'applications') {
+                                insertData = {
+                                    name: data.name || '테스트 사용자',
+                                    phone: data.phone || '010-0000-0000',
+                                    workType: data.workType || 'interior',
+                                    privacy: (typeof data.privacy === 'boolean') ? data.privacy : true,
+                                    description: data.description || '테스트 신청서입니다.'
+                                };
+                            } else if (tableName === 'admin_settings') {
+                                insertData = {
+                                    apartment_id: data.apartment_id || `APT-${Date.now()}`,
+                                    title: data.title || '구포현대아파트 통신 환경 개선 신청서',
+                                    subtitle: data.subtitle || '새로운 신청서가 접수되었습니다',
+                                    phones: data.phones || ['010-1234-5678'],
+                                    emails: data.emails || ['admin@example.com'],
+                                    created_at: new Date().toISOString(),
+                                    updated_at: new Date().toISOString()
+                                };
+                            } else if (tableName === 'notification_logs') {
+                                insertData = {
+                                    notification_type: data.notification_type || 'test',
+                                    recipient: data.recipient || 'test@example.com',
+                                    message: data.message || '테스트 메시지',
+                                    status: data.status || 'pending',
+                                    sent_at: new Date().toISOString()
+                                };
+                            }
+
+                            // 허용된 컬럼만 유지
+                            if (allowedColumns && Array.isArray(allowedColumns)) {
+                                insertData = Object.fromEntries(
+                                    Object.entries(insertData).filter(([key]) => allowedColumns.includes(key))
+                                );
+                            }
+
+                            console.log(`삽입할 데이터:`, insertData);
+
+                            const { data: result, error } = await this.supabase
+                                .from(tableName)
+                                .insert(insertData)
+                                .select();
+
+                            if (error) {
+                                console.error('Supabase 삽입 오류:', error);
+                                throw error;
+                            }
+
+                            return { success: true, data: result };
+                        } catch (error) {
+                            console.error(`테이블 ${tableName} 데이터 삽입 실패:`, error);
+                            return { success: false, error: error.message };
+                        }
+                    }
+
+                    async updateData(tableName, data, conditions) {
+                        try {
+                            // 컬럼 추론
+                            let allowedColumns = null;
+                            try {
+                                const { data: sampleRows } = await this.supabase
+                                    .from(tableName)
+                                    .select('*')
+                                    .limit(1);
+                                if (sampleRows && sampleRows.length > 0) {
+                                    allowedColumns = Object.keys(sampleRows[0]);
+                                }
+                            } catch (_) {}
+
+                            // 업데이트할 데이터에 timestamp 추가
+                            let updateData = { ...data };
+                            if (tableName === 'admin_settings') {
+                                updateData.updated_at = new Date().toISOString();
+                            }
+
+                            // 허용 컬럼만 유지
+                            if (allowedColumns && Array.isArray(allowedColumns)) {
+                                updateData = Object.fromEntries(
+                                    Object.entries(updateData).filter(([key]) => allowedColumns.includes(key))
+                                );
+                                // 조건 컬럼 정규화 및 유지
+                                let normalizedConditions = { ...(conditions || {}) };
+                                // id가 없고 대체 PK가 존재하면 자동 매핑
+                                if (!allowedColumns.includes('id') && 'id' in normalizedConditions) {
+                                    const candidateKeys = ['application_id', 'applicationId', 'uuid', 'application_uuid'];
+                                    const altKey = candidateKeys.find(k => allowedColumns.includes(k));
+                                    if (altKey) {
+                                        normalizedConditions[altKey] = normalizedConditions.id;
+                                        delete normalizedConditions.id;
+                                    }
+                                }
+                                conditions = Object.fromEntries(
+                                    Object.entries(normalizedConditions).filter(([key]) => allowedColumns.includes(key))
+                                );
+                            }
+
+                            console.log(`업데이트할 데이터:`, updateData);
+                            console.log(`업데이트 조건:`, conditions);
+
+                            // 조건이 비어있는지 확인
+                            if (!conditions || Object.keys(conditions).length === 0) {
+                                throw new Error('업데이트 조건이 필요합니다.');
+                            }
+
+                            // 사전 존재 여부 확인
+                            try {
+                                let precheck = this.supabase.from(tableName).select('id').limit(1);
+                                Object.keys(conditions).forEach(key => {
+                                    precheck = precheck.eq(key, conditions[key]);
+                                });
+                                const { data: existsCheck } = await precheck;
+                                console.log('사전 조회 결과:', existsCheck);
+                                // RLS 등으로 조회가 안 되더라도 업데이트 시도는 계속 진행
+                            } catch (_) { /* 무시하고 본 업데이트 진행 */ }
+
+                            let query = this.supabase.from(tableName).update(updateData);
+
+                            // 조건 적용
+                            Object.keys(conditions).forEach(key => {
+                                if (conditions[key] !== undefined && conditions[key] !== null && conditions[key] !== '') {
+                                    query = query.eq(key, conditions[key]);
+                                }
+                            });
+
+                            const { data: result, error } = await query.select();
+                            if (error) {
+                                console.error('Supabase 업데이트 오류:', error);
+                                throw error;
+                            }
+
+                            // 업데이트된 행이 있는지 확인
+                            if (!result || result.length === 0) {
+                                // 마지막 삽입 레코드로 재시도 (PK 자동 추정)
+                                if (typeof lastInsertedRow === 'object' && lastInsertedRow) {
+                                    const pkCandidates = ['id', 'application_id', 'applicationId', 'uuid', 'application_uuid'];
+                                    const pkKey = pkCandidates.find(k => k in lastInsertedRow);
+                                    if (pkKey) {
+                                        let retry = this.supabase.from(tableName).update(updateData).eq(pkKey, lastInsertedRow[pkKey]);
+                                        const { data: retryData, error: retryErr } = await retry.select();
+                                        if (retryErr) {
+                                            console.error('재시도 업데이트 오류:', retryErr);
+                                        }
+                                        if (retryData && retryData.length > 0) {
+                                            // UI에도 반영
+                                            try {
+                                                const condEl = document.getElementById('updateConditionsInput');
+                                                if (condEl) condEl.value = JSON.stringify({ [pkKey]: lastInsertedRow[pkKey] });
+                                            } catch (_) {}
+                                            return { success: true, data: retryData };
+                                        }
+                                    }
+                                }
+                                return { success: false, error: '조건에 맞는 데이터를 찾을 수 없습니다.' };
+                            }
+
+                            return { success: true, data: result };
+                        } catch (error) {
+                            console.error(`테이블 ${tableName} 데이터 업데이트 실패:`, error);
+                            return { success: false, error: error.message };
+                        }
+                    }
+
+                    async executeQuery(query) {
+                        try {
+                            // 간단한 쿼리 실행 (실제로는 RPC 함수가 필요)
+                            const { data, error } = await this.supabase
+                                .from('applications')
+                                .select('*')
+                                .limit(5);
+
+                            if (error) throw error;
+                            return { success: true, data };
+                        } catch (error) {
+                            return { success: false, error: error.message };
+                        }
+                    }
+                }
+
+                // MCP 클라이언트 인스턴스 생성
+                mcpClient = new MCPClient();
+                mcpClient.supabase = supabase;
+                
+                updateMCPStatus('MCP 클라이언트 초기화 완료');
+                
+                // 전역 함수들 등록
+                window.checkConnection = async function() {
+                    if (!mcpClient) {
+                        document.getElementById('connectionStatus').innerHTML = '<p>MCP 클라이언트가 초기화되지 않았습니다.</p>';
+                        return;
+                    }
+                    
+                    const statusDiv = document.getElementById('connectionStatus');
+                    statusDiv.innerHTML = '<p>연결 확인 중...</p>';
+                    
+                    try {
+                        const result = await mcpClient.checkConnection();
+                        if (result.success) {
+                            statusDiv.className = 'status-card';
+                            statusDiv.innerHTML = `
+                                <h3>✅ 연결 성공</h3>
+                                <p>Supabase MCP 서버에 정상적으로 연결되었습니다.</p>
+                                <p><strong>URL:</strong> ${supabase.supabaseUrl}</p>
+                                <p><strong>상태:</strong> ${mcpClient.isConnected ? '연결됨' : '연결 안됨'}</p>
+                            `;
+                        } else {
+                            throw new Error(result.error);
+                        }
+                    } catch (error) {
+                        statusDiv.className = 'error-card';
+                        statusDiv.innerHTML = `
+                            <h3>❌ 연결 실패</h3>
+                            <p>오류: ${error.message}</p>
+                        `;
+                    }
+                };
+
+                window.getSchemaInfo = async function() {
+                    if (!mcpClient) return;
+                    const resultDiv = document.getElementById('schemaResult');
+                    resultDiv.textContent = '스키마 정보 조회 중...';
+                    
+                    try {
+                        const result = await mcpClient.getSchemaInfo();
+                        if (result.success) {
+                            resultDiv.textContent = JSON.stringify(result.data, null, 2);
+                        } else {
+                            resultDiv.textContent = `오류: ${result.error}`;
+                        }
+                    } catch (error) {
+                        resultDiv.textContent = `오류: ${error.message}`;
+                    }
+                };
+
+                window.getTableData = async function() {
+                    if (!mcpClient) return;
+                    const tableName = document.getElementById('tableName').value;
+                    const limit = parseInt(document.getElementById('limitCount').value);
+                    const resultDiv = document.getElementById('tableDataResult');
+                    
+                    resultDiv.textContent = `${tableName} 테이블 데이터 조회 중...`;
+                    
+                    try {
+                        const result = await mcpClient.getTableData(tableName, limit);
+                        if (result.success) {
+                            resultDiv.textContent = JSON.stringify(result.data, null, 2);
+                        } else {
+                            resultDiv.textContent = `오류: ${result.error}`;
+                        }
+                    } catch (error) {
+                        resultDiv.textContent = `오류: ${error.message}`;
+                    }
+                };
+
+                window.insertData = async function() {
+                    if (!mcpClient) return;
+                    
+                    // 디버깅: 요소 찾기 확인
+                    const tableNameElement = document.getElementById('insertTableName');
+                    const dataTextElement = document.getElementById('insertDataInput');
+                    const resultDiv = document.getElementById('insertResult');
+                    
+                    console.log('HTML 요소 찾기 결과:', {
+                        tableNameElement: tableNameElement,
+                        dataTextElement: dataTextElement,
+                        resultDiv: resultDiv,
+                        'insertTableName exists': !!tableNameElement,
+                        'insertDataInput exists': !!dataTextElement,
+                        'insertResult exists': !!resultDiv
+                    });
+                    
+                    if (!tableNameElement || !dataTextElement || !resultDiv) {
+                        console.error('필요한 HTML 요소를 찾을 수 없습니다:', {
+                            tableName: !!tableNameElement,
+                            dataText: !!dataTextElement,
+                            resultDiv: !!resultDiv
+                        });
+                        return;
+                    }
+                    
+                    const tableName = tableNameElement.value;
+                    const dataText = dataTextElement.value;
+                    
+                    console.log('데이터 삽입 시도:', { tableName, dataText });
+                    console.log('dataTextElement.value:', dataTextElement.value);
+                    console.log('dataTextElement.innerHTML:', dataTextElement.innerHTML);
+                    console.log('dataTextElement.textContent:', dataTextElement.textContent);
+                    
+                    try {
+                        if (!dataText.trim()) {
+                            resultDiv.textContent = '❌ JSON 데이터를 입력해주세요.';
+                            return;
+                        }
+                        
+                        const data = JSON.parse(dataText);
+                        resultDiv.textContent = `${tableName} 테이블에 데이터 삽입 중...`;
+                        
+                        const result = await mcpClient.insertData(tableName, data);
+                        if (result.success) {
+                            resultDiv.textContent = `✅ 삽입 성공!\n\n삽입된 데이터:\n${JSON.stringify(result.data, null, 2)}`;
+                            // 마지막 삽입 행의 id를 업데이트 조건에 자동 반영
+                            try {
+                                const last = Array.isArray(result.data) ? result.data[result.data.length - 1] : result.data;
+                                lastInsertedRow = last || null;
+                                if (last && last.id) {
+                                    const cond = document.getElementById('updateConditionsInput');
+                                    if (cond) cond.value = JSON.stringify({ id: last.id });
+                                }
+                            } catch (_) {}
+                        } else {
+                            resultDiv.textContent = `❌ 삽입 실패: ${result.error}\n\n문제 해결 방법:\n1. JSON 형식이 올바른지 확인\n2. 필수 필드가 포함되었는지 확인\n3. 브라우저 콘솔에서 상세 오류 확인`;
+                        }
+                    } catch (error) {
+                        if (error.name === 'SyntaxError') {
+                            resultDiv.textContent = `❌ JSON 형식 오류: ${error.message}\n\n올바른 JSON 형식 예시:\n{"name": "홍길동", "phone": "010-1234-5678"}`;
+                        } else {
+                            resultDiv.textContent = `❌ 오류: ${error.message}`;
+                        }
+                    }
+                };
+
+                window.updateData = async function() {
+                    if (!mcpClient) return;
+                    
+                    // 디버깅: 요소 찾기 확인
+                    const tableNameElement = document.getElementById('updateTableName');
+                    const dataTextElement = document.getElementById('updateDataInput');
+                    const conditionsTextElement = document.getElementById('updateConditionsInput');
+                    const resultDiv = document.getElementById('updateResult');
+                    
+                    if (!tableNameElement || !dataTextElement || !conditionsTextElement || !resultDiv) {
+                        console.error('필요한 HTML 요소를 찾을 수 없습니다:', {
+                            tableName: !!tableNameElement,
+                            dataText: !!dataTextElement,
+                            conditionsText: !!conditionsTextElement,
+                            resultDiv: !!resultDiv
+                        });
+                        return;
+                    }
+                    
+                    const tableName = tableNameElement.value;
+                    const dataText = dataTextElement.value;
+                    const conditionsText = conditionsTextElement.value;
+                    
+                    console.log('데이터 업데이트 시도:', { tableName, dataText, conditionsText });
+                    
+                    try {
+                        if (!dataText.trim() || !conditionsText.trim()) {
+                            resultDiv.textContent = '❌ 업데이트 데이터와 조건을 모두 입력해주세요.';
+                            return;
+                        }
+                        
+                        const data = JSON.parse(dataText);
+                        let conditions = JSON.parse(conditionsText);
+                        // 조건 자동 보정: UUID 형식이 아니거나 비어있으면 마지막 삽입 레코드로 대체
+                        try {
+                            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                            const isEmpty = !conditions || Object.keys(conditions).length === 0;
+                            const hasInvalidId = conditions && 'id' in conditions && (typeof conditions.id !== 'string' || !uuidRegex.test(conditions.id));
+                            if ((isEmpty || hasInvalidId) && lastInsertedRow) {
+                                const pkCandidates = ['id', 'application_id', 'applicationId', 'uuid', 'application_uuid'];
+                                const pkKey = pkCandidates.find(k => k in lastInsertedRow);
+                                if (pkKey) {
+                                    conditions = { [pkKey]: lastInsertedRow[pkKey] };
+                                    // UI 반영
+                                    conditionsTextElement.value = JSON.stringify(conditions);
+                                }
+                            }
+                        } catch (_) {}
+                        resultDiv.textContent = `${tableName} 테이블 데이터 업데이트 중...`;
+                        
+                        const result = await mcpClient.updateData(tableName, data, conditions);
+                        if (result.success) {
+                            resultDiv.textContent = `✅ 업데이트 성공!\n\n업데이트된 데이터:\n${JSON.stringify(result.data, null, 2)}`;
+                        } else {
+                            resultDiv.textContent = `❌ 업데이트 실패: ${result.error}\n\n문제 해결 방법:\n1. JSON 형식이 올바른지 확인\n2. 업데이트 조건이 정확한지 확인\n3. 해당 데이터가 존재하는지 확인`;
+                        }
+                    } catch (error) {
+                        if (error.name === 'SyntaxError') {
+                            resultDiv.textContent = `❌ JSON 형식 오류: ${error.message}\n\n올바른 JSON 형식 예시:\n업데이트 데이터: {"name": "김철수"}\n조건: {"id": "123e4567-e89b-12d3-a456-426614174000"}`;
+                        } else {
+                            resultDiv.textContent = `❌ 오류: ${error.message}`;
+                        }
+                    }
+                };
+
+                // 조건 자동 채우기: 최근 삽입 레코드 또는 최신 레코드의 PK 사용
+                window.fillUpdateCondition = async function() {
+                    try {
+                        const tableName = document.getElementById('updateTableName').value;
+                        const condEl = document.getElementById('updateConditionsInput');
+                        const pkCandidates = ['id', 'application_id', 'applicationId', 'uuid', 'application_uuid'];
+
+                        // 1) 최근 삽입값 우선
+                        if (typeof lastInsertedRow === 'object' && lastInsertedRow) {
+                            const pkKey = pkCandidates.find(k => k in lastInsertedRow);
+                            if (pkKey) {
+                                condEl.value = JSON.stringify({ [pkKey]: lastInsertedRow[pkKey] });
+                                return;
+                            }
+                        }
+
+                        // 2) 테이블에서 최신 레코드 조회하여 PK 추정
+                        let latest = null;
+                        // 우선순위 있는 정렬 키 시도
+                        const orderKeys = ['submitted_at', 'created_at', 'id'];
+                        for (const key of orderKeys) {
+                            try {
+                                const { data } = await mcpClient.supabase
+                                    .from(tableName)
+                                    .select('*')
+                                    .order(key, { ascending: false })
+                                    .limit(1);
+                                if (data && data.length > 0) { latest = data[0]; break; }
+                            } catch (_) { /* 다음 키 시도 */ }
+                        }
+                        // 실패 시 limit(1)만
+                        if (!latest) {
+                            try {
+                                const { data } = await mcpClient.supabase
+                                    .from(tableName)
+                                    .select('*')
+                                    .limit(1);
+                                if (data && data.length > 0) latest = data[0];
+                            } catch (_) {}
+                        }
+
+                        if (latest) {
+                            const pkKey = pkCandidates.find(k => k in latest) || Object.keys(latest)[0];
+                            condEl.value = JSON.stringify({ [pkKey]: latest[pkKey] });
+                        } else {
+                            alert('조건을 자동으로 채울 수 없습니다. 먼저 데이터를 삽입하거나 조건을 수동 입력하세요.');
+                        }
+                    } catch (e) {
+                        console.error('조건 자동 채우기 실패:', e);
+                        alert('조건 자동 채우기 중 오류가 발생했습니다. 콘솔을 확인하세요.');
+                    }
+                };
+
+                window.executeQuery = async function() {
+                    if (!mcpClient) return;
+                    const query = document.getElementById('sqlQuery').value;
+                    const resultDiv = document.getElementById('queryResult');
+                    
+                    resultDiv.textContent = 'SQL 쿼리 실행 중...';
+                    
+                    try {
+                        const result = await mcpClient.executeQuery(query);
+                        if (result.success) {
+                            resultDiv.textContent = `✅ 쿼리 실행 성공:\n${JSON.stringify(result.data, null, 2)}`;
+                        } else {
+                            resultDiv.textContent = `❌ 쿼리 실행 실패: ${result.error}`;
+                        }
+                    } catch (error) {
+                        resultDiv.textContent = `❌ 오류: ${error.message}`;
+                    }
+                };
+
+                updateFunctionStatus('전역 함수 등록 완료');
+                isLoaded = true;
+                
+                // 초기 디버그 정보 표시
+                showDebugInfo();
+                
+            } catch (error) {
+                console.error('MCP 클라이언트 초기화 실패:', error);
+                updateMCPStatus(`초기화 실패: ${error.message}`);
+                
+                // 오류 정보를 상태에 표시
+                document.getElementById('connectionStatus').className = 'error-card';
+                document.getElementById('connectionStatus').innerHTML = `
+                    <h3>❌ MCP 클라이언트 초기화 실패</h3>
+                    <p>오류: ${error.message}</p>
+                    <p>브라우저 콘솔을 확인하여 자세한 오류 정보를 확인하세요.</p>
+                `;
+            }
+        }
+
+        // 페이지 로드 시 초기화
+        window.addEventListener('load', async () => {
+            updatePageStatus('페이지 로드 완료, 초기화 시작...');
+            
+            try {
+                await initializeSupabase();
+                await initializeMCP();
+                updatePageStatus('모든 초기화 완료!');
+            } catch (error) {
+                updatePageStatus(`초기화 실패: ${error.message}`);
+            }
+        });
+    </script>
+</body>
+</html>

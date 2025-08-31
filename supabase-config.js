@@ -1,12 +1,30 @@
 // Supabase 클라이언트 설정
-import { createClient } from 'https://esm.sh/@supabase/supabase-js'
+// CDN을 통한 Supabase 클라이언트 로딩
+let supabase = null;
 
-// ✅ Supabase 프로젝트 설정 (실제 값으로 교체 완료!)
-const supabaseUrl = 'https://boorsqnfkwglzvnhtwcx.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0'
+// Supabase 클라이언트 초기화 함수
+async function initializeSupabase() {
+    try {
+        // CDN에서 Supabase 클라이언트 로드
+        const { createClient } = await import('https://cdn.skypack.dev/@supabase/supabase-js');
+        
+        // ✅ Supabase 프로젝트 설정 (실제 값으로 교체 완료!)
+        const supabaseUrl = 'https://boorsqnfkwglzvnhtwcx.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0';
+        
+        // Supabase 클라이언트 생성
+        supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        console.log('Supabase 클라이언트 초기화 성공');
+        return supabase;
+    } catch (error) {
+        console.error('Supabase 클라이언트 초기화 실패:', error);
+        throw error;
+    }
+}
 
-// Supabase 클라이언트 생성
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// 초기화 즉시 실행
+initializeSupabase();
 
 // 데이터베이스 테이블 구조
 /*
@@ -51,4 +69,8 @@ CREATE TABLE notification_logs (
 */
 
 // Supabase Edge Functions 기본 URL (프로젝트 ref 기반)
-export const functionsBaseUrl = `https://${new URL(supabaseUrl).hostname.split('.')[0]}.functions.supabase.co`
+export const functionsBaseUrl = `https://boorsqnfkwglzvnhtwcx.functions.supabase.co`;
+
+// Supabase 클라이언트 내보내기 (초기화 완료 후 사용 가능)
+export { supabase };
+export { initializeSupabase };
