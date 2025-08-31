@@ -30,8 +30,8 @@ function formatDate(dateString) {
 
 
 
-// 완전히 텍스트만 사용하는 이메일 내용 구성
-function buildEmailHtml(applicationData, adminSettings) {
+// 텍스트 전용 이메일 내용 구성 (굵게/크게는 불가하므로 강조 문자로 표기)
+function buildEmailText(applicationData, adminSettings) {
     const headerTitle = adminSettings.title || '구포현대아파트 통신 환경 개선 신청서';
     const headerSubtitle = adminSettings.subtitle || '새로운 신청서가 접수되었습니다';
     const name = applicationData.name || '미입력';
@@ -40,20 +40,20 @@ function buildEmailHtml(applicationData, adminSettings) {
     const startDate = formatDate(applicationData.startDate);
     const description = applicationData.description || '내용 없음';
     const submitted = new Date(applicationData.submittedAt || Date.now()).toLocaleString('ko-KR');
-    
-    return `
-${headerTitle}
-${headerSubtitle}
 
-공사요청 : ${name}
-연락처 : ${phone}
-사용 중인 통신사 : ${workType}
-공사 희망일 : ${startDate}
-상세 요청사항 : ${description}
-신청 일시 : ${submitted}
-
-담당자가 빠른 시일 내에 연락드리겠습니다
-    `.trim();
+    return [
+        `====== ${headerTitle} ======`,
+        `${headerSubtitle}`,
+        '',
+        `공사 요청 : ${name}`,
+        `연락처 : ${phone}`,
+        `사용중인 통신사 : ${workType}`,
+        `==== 공사 희망일 : ${startDate} ====`,
+        `상세 요청 사항 : ${description}`,
+        `신청 일시 : ${submitted}`,
+        '',
+        '담당자가 빠른 시일 내에 연락드리겠습니다'
+    ].join('\n');
 }
 // 휴대폰 번호 포맷팅 (하이픈 추가)
 function formatPhoneNumber(raw) {
@@ -104,11 +104,12 @@ export async function sendSMS(phoneNumber, message) {
     }
 }
 
-// 이메일 발송 (Supabase Edge Function 호출 - SDK 사용)
-export async function sendEmail(emailAddress, subject, html, textFallback) {
+// 이메일 발송 (텍스트 전용) - Supabase Edge Function 호출
+export async function sendEmail(emailAddress, subject, textBody) {
     try {
         const { data, error } = await supabase.functions.invoke('send-email', {
-            body: { to: emailAddress, subject, html, text: textFallback }
+            // HTML 본문은 사용하지 않습니다 (텍스트 전용)
+            body: { to: emailAddress, subject, text: textBody }
         });
 
         await saveNotificationLog({
@@ -154,11 +155,11 @@ export async function sendApplicationNotification(applicationData, adminSettings
         // 이메일 알림 발송
         if (adminSettings.emails && adminSettings.emails.length > 0) {
             const emailSubject = `🔔 새 신청서 접수 - ${applicationData.name || '무명'} (${getWorkTypeDisplay(applicationData.workType)})`;
-            const emailContent = buildEmailHtml(applicationData, adminSettings);
+            const emailContent = buildEmailText(applicationData, adminSettings);
             
             for (const email of adminSettings.emails) {
                 if (email && email.trim()) {
-                    const result = await sendEmail(email.trim(), emailSubject, emailContent, emailContent);
+                    const result = await sendEmail(email.trim(), emailSubject, emailContent);
                     results.email.push({ email, success: result.success });
                 }
             }
@@ -167,7 +168,8 @@ export async function sendApplicationNotification(applicationData, adminSettings
             const anySuccess = results.email.some(r => r.success);
             if (!anySuccess && adminSettings.emails[0]) {
                 try {
-                    sendFallbackNotification('email', adminSettings.emails[0], emailMessage);
+                    // 폴백 본문도 텍스트 전용 사용
+                    sendFallbackNotification('email', adminSettings.emails[0], emailContent);
                 } catch (e) {
                     console.warn('폴백 이메일 시도 실패:', e);
                 }
