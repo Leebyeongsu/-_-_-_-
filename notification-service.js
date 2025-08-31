@@ -196,10 +196,10 @@ export function sendFallbackNotification(type, recipient, message) {
                 alert(`SMS 메시지가 클립보드에 복사되었습니다.\n\n받는 사람: ${recipient}\n메시지: ${message}`);
             }
         } else if (type === 'email') {
-            // 이메일 폴백
-            const subject = '🔔 새 신청서 접수 알림';
-            const mailtoLink = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-            window.location.href = mailtoLink;
+            // 이메일 폴백 - 고객 폰에서 메일 앱 팝업 방지
+            // mailto 링크 사용하지 않음
+            console.log('이메일 폴백 알림 (팝업 방지):', { recipient, message });
+            return { success: false, type: 'fallback', reason: '팝업 방지' };
         }
         
         return { success: true, type: 'fallback' };

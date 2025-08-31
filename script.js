@@ -91,9 +91,8 @@ async function processCustomerFormSubmission(event) {
             const notificationResults = await sendApplicationNotification(applicationData, adminSettings);
             console.log('알림 발송 결과:', notificationResults);
         } else {
-            // 폴백: 브라우저 기본 앱 사용
-            const fallbackMessage = `🔔 새 신청서 접수\n\n신청자: ${applicationData.name}\n연락처: ${applicationData.phone}`;
-            sendFallbackNotification('sms', '010-0000-0000', fallbackMessage);
+            // 폴백: 브라우저 기본 앱 사용하지 않음 (팝업 방지)
+            console.log('관리자 설정이 없어 폴백 알림을 건너뜁니다.');
         }
         
         // 성공 메시지 표시
