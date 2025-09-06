@@ -167,7 +167,7 @@ async function saveApplicationLocally(applicationData) {
         // 로컬 알림 처리 + 실제 이메일 발송 시도
         await handleLocalNotification(localApplication);
         
-        // 로컬 백업이어도 실제 이메일 발송 시도
+        // 로컬 백업이어도 실제 이메일 발송 시도 (Edge Function은 application.id가 필요해서 EmailJS 사용)
         const emailResult = await sendEmailToAdmins(localApplication);
         if (emailResult) {
             console.log('로컬 백업에서 이메일 발송 성공');
@@ -281,8 +281,9 @@ async function saveApplicationToSupabase(applicationData) {
 
         console.log('신청서가 Supabase에 저장되었습니다:', insertedApplication);
 
-        // 관리자에게 알림 발송
-        await sendNotificationsToAdmins(insertedApplication);
+        // Supabase Edge Function으로 관리자에게 이메일 발송
+        const emailResult = await sendNotificationsViaEdgeFunction(insertedApplication);
+        insertedApplication.email_sent = emailResult;
 
         return insertedApplication;
 
@@ -390,7 +391,47 @@ async function sendEmailToAdmins(applicationData) {
     }
 }
 
-// 관리자에게 알림 발송 (Supabase 로그 + 실제 이메일)
+// Supabase Edge Function을 통한 이메일 발송
+async function sendNotificationsViaEdgeFunction(applicationData) {
+    try {
+        if (!supabase) {
+            console.warn('Supabase가 초기화되지 않았습니다. EmailJS로 대체합니다.');
+            return await sendEmailToAdmins(applicationData);
+        }
+
+        console.log('Supabase Edge Function 호출:', applicationData.id);
+
+        // Edge Function 호출
+        const { data, error } = await supabase.functions.invoke('send-notification', {
+            body: { 
+                application_id: applicationData.id
+            }
+        });
+
+        if (error) {
+            console.error('Edge Function 호출 오류:', error);
+            console.log('EmailJS로 대체 시도...');
+            return await sendEmailToAdmins(applicationData);
+        }
+
+        console.log('Edge Function 응답:', data);
+        
+        if (data?.success) {
+            console.log(`Edge Function으로 ${data.sent}/${data.total}개 이메일 발송 성공`);
+            return true;
+        } else {
+            console.warn('Edge Function 실행 실패, EmailJS로 대체 시도...');
+            return await sendEmailToAdmins(applicationData);
+        }
+
+    } catch (error) {
+        console.error('Edge Function 실행 중 오류:', error);
+        console.log('EmailJS로 대체 시도...');
+        return await sendEmailToAdmins(applicationData);
+    }
+}
+
+// 관리자에게 알림 발송 (기존 EmailJS 방식 - 백업용)
 async function sendNotificationsToAdmins(applicationData) {
     try {
         // 저장된 관리자 연락처 가져오기
