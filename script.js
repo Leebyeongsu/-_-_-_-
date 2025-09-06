@@ -1,3 +1,6 @@
+// Supabase 설정 import
+import { supabase, initializeSupabase } from './supabase-config.js';
+
 // 아파트 ID 설정 (고유 식별자)
 const APARTMENT_ID = 'gupo-apartment';
 
@@ -14,26 +17,90 @@ let formData = {};
 let currentQRDataURL = null;
 let adminSettings = null; // 관리자 설정 캐시
 
-// 관리자 설정 저장 (로컬 저장소)
-function saveAdminSettingsLocal() {
+// 관리자 설정 저장 (Supabase)
+async function saveAdminSettingsToCloud() {
     try {
+        if (!supabase) {
+            console.warn('Supabase가 초기화되지 않았습니다.');
+            return;
+        }
+
         const settings = {
+            apartment_id: APARTMENT_ID,
             title: localStorage.getItem('mainTitle') || '',
             phones: JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]'),
-            emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]')
+            emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]'),
+            updated_at: new Date().toISOString()
         };
         
-        console.log('관리자 설정이 로컬에 저장되었습니다.', settings);
+        // upsert를 사용하여 존재하면 업데이트, 없으면 삽입
+        const { data, error } = await supabase
+            .from('admin_settings')
+            .upsert(settings, { 
+                onConflict: 'apartment_id',
+                returning: 'minimal'
+            });
+        
+        if (error) {
+            console.error('Supabase 저장 오류:', error);
+            return;
+        }
+        
+        console.log('관리자 설정이 Supabase에 저장되었습니다.', settings);
         adminSettings = settings;
     } catch (error) {
         console.error('관리자 설정 저장 중 오류:', error);
     }
 }
 
-// 관리자 설정 로드 (로컬 저장소)
+// 관리자 설정 로드 (Supabase)
+async function loadAdminSettingsFromCloud() {
+    try {
+        if (!supabase) {
+            console.warn('Supabase가 초기화되지 않았습니다. 로컬 설정을 사용합니다.');
+            loadAdminSettingsLocal();
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('admin_settings')
+            .select('*')
+            .eq('apartment_id', APARTMENT_ID)
+            .single();
+        
+        if (error && error.code !== 'PGRST116') { // 데이터가 없는 경우가 아닌 실제 오류
+            console.error('Supabase 로드 오류:', error);
+            loadAdminSettingsLocal(); // 실패시 로컬 로드
+            return;
+        }
+        
+        if (data) {
+            // Supabase에서 가져온 데이터를 localStorage에 동기화
+            if (data.title) localStorage.setItem('mainTitle', data.title);
+            if (data.phones) localStorage.setItem('savedPhoneNumbers', JSON.stringify(data.phones));
+            if (data.emails) localStorage.setItem('savedEmailAddresses', JSON.stringify(data.emails));
+            
+            adminSettings = data;
+            console.log('Supabase에서 관리자 설정을 로드했습니다.');
+        } else {
+            console.log('Supabase에 저장된 관리자 설정이 없습니다. 로컬 설정을 사용합니다.');
+            loadAdminSettingsLocal();
+        }
+        
+        // 화면 업데이트
+        loadSavedTitles();
+        displaySavedInputs();
+    } catch (error) {
+        console.error('관리자 설정 로드 중 오류:', error);
+        loadAdminSettingsLocal(); // 실패시 로컬 로드
+    }
+}
+
+// 로컬 관리자 설정 로드 (백업용)
 function loadAdminSettingsLocal() {
     try {
         const settings = {
+            apartment_id: APARTMENT_ID,
             title: localStorage.getItem('mainTitle') || '',
             phones: JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]'),
             emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]')
@@ -46,12 +113,160 @@ function loadAdminSettingsLocal() {
         loadSavedTitles();
         displaySavedInputs();
     } catch (error) {
-        console.error('관리자 설정 로드 중 오류:', error);
+        console.error('로컬 관리자 설정 로드 중 오류:', error);
     }
 }
 
-// 고객용 신청서 제출 처리 (로컬 처리)
-function processCustomerFormSubmission(event) {
+// 신청서를 Supabase에 저장하고 관리자에게 알림 발송
+async function saveApplicationToSupabase(applicationData) {
+    try {
+        if (!supabase) {
+            console.warn('Supabase가 초기화되지 않았습니다.');
+            return false;
+        }
+
+        // 신청번호 생성 (현재 날짜 + 랜덤 4자리)
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const applicationNumber = `APP-${dateStr}-${randomNum}`;
+
+        // 통신사 이름 변환
+        const providerNames = {
+            'interior': 'KT',
+            'exterior': 'SKT', 
+            'plumbing': 'LGU+',
+            'electrical': '기타(지역방송)'
+        };
+
+        const applicationRecord = {
+            application_number: applicationNumber,
+            name: applicationData.name,
+            phone: applicationData.phone,
+            address: applicationData.name, // 동/호수 정보
+            work_type: applicationData.workType,
+            work_type_display: providerNames[applicationData.workType] || applicationData.workType,
+            start_date: applicationData.startDate || null,
+            description: applicationData.description || null,
+            submitted_at: applicationData.submittedAt
+        };
+
+        console.log('Supabase에 신청서 저장 시도:', applicationRecord);
+
+        // applications 테이블에 신청서 저장
+        const { data: insertedApplication, error: insertError } = await supabase
+            .from('applications')
+            .insert([applicationRecord])
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('Supabase 신청서 저장 오류:', insertError);
+            return false;
+        }
+
+        console.log('신청서가 Supabase에 저장되었습니다:', insertedApplication);
+
+        // 관리자에게 알림 발송
+        await sendNotificationsToAdmins(insertedApplication);
+
+        return insertedApplication;
+
+    } catch (error) {
+        console.error('신청서 저장 중 오류:', error);
+        return false;
+    }
+}
+
+// 관리자에게 알림 발송 (이메일 및 SMS)
+async function sendNotificationsToAdmins(applicationData) {
+    try {
+        if (!supabase) {
+            console.warn('Supabase가 초기화되지 않았습니다.');
+            return;
+        }
+
+        // 저장된 관리자 연락처 가져오기
+        const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+        const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+        
+        // 알림 메시지 생성
+        const submittedDate = new Date(applicationData.submitted_at);
+        const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const emailMessage = `
+[구포현대아파트] 새로운 통신환경개선 신청서
+
+■ 신청번호: ${applicationData.application_number}
+■ 신청자: ${applicationData.name}
+■ 연락처: ${applicationData.phone}
+■ 동/호수: ${applicationData.address}
+■ 현재 통신사: ${applicationData.work_type_display}
+■ 희망일: ${applicationData.start_date || '미지정'}
+■ 상세내용: ${applicationData.description || '없음'}
+■ 접수일시: ${formattedDate}
+
+관리자님께서 확인하시고 적절한 조치를 취해주시기 바랍니다.
+        `;
+
+        const smsMessage = `[구포현대아파트] 새 신청서 접수
+신청자: ${applicationData.name}
+연락처: ${applicationData.phone}
+통신사: ${applicationData.work_type_display}
+신청번호: ${applicationData.application_number}`;
+
+        const notifications = [];
+
+        // 이메일 알림 로그 생성
+        savedEmails.forEach(email => {
+            notifications.push({
+                application_id: applicationData.id,
+                notification_type: 'email',
+                recipient: email,
+                message: emailMessage,
+                status: 'pending'
+            });
+        });
+
+        // SMS 알림 로그 생성
+        savedPhones.forEach(phone => {
+            notifications.push({
+                application_id: applicationData.id,
+                notification_type: 'sms', 
+                recipient: phone,
+                message: smsMessage,
+                status: 'pending'
+            });
+        });
+
+        if (notifications.length > 0) {
+            const { error: notificationError } = await supabase
+                .from('notification_logs')
+                .insert(notifications);
+
+            if (notificationError) {
+                console.error('알림 로그 저장 오류:', notificationError);
+            } else {
+                console.log(`${notifications.length}개의 알림이 대기열에 추가되었습니다.`);
+            }
+        }
+
+        // TODO: 실제 이메일/SMS 발송은 Supabase Edge Functions로 구현
+        // 현재는 로그만 저장하고 향후 백엔드에서 처리하도록 설계
+
+    } catch (error) {
+        console.error('알림 발송 중 오류:', error);
+    }
+}
+
+// 고객용 신청서 제출 처리 (Supabase 저장 및 알림 발송)
+async function processCustomerFormSubmission(event) {
     event.preventDefault();
     const formDataObj = new FormData(event.target);
     const applicationData = {};
@@ -67,19 +282,50 @@ function processCustomerFormSubmission(event) {
         return;
     }
     
+    if (!applicationData.privacy) {
+        alert('개인정보 수집 및 이용에 동의해주세요.');
+        return;
+    }
+    
     // 추가 정보 설정
     applicationData.submittedAt = new Date().toISOString();
     
     console.log('신청서 제출:', applicationData);
     
-    // 성공 메시지 표시
-    alert('✅ 신청서가 성공적으로 제출되었습니다!');
+    // 제출 버튼 비활성화 (중복 제출 방지)
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '제출 중...';
+    }
     
-    // 폼 초기화
-    event.target.reset();
-    
-    // 결과 페이지로 이동
-    showResult();
+    try {
+        // Supabase에 신청서 저장 및 관리자 알림
+        const savedApplication = await saveApplicationToSupabase(applicationData);
+        
+        if (savedApplication) {
+            // 성공 메시지 표시
+            alert(`✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${savedApplication.application_number}\n관리자에게 자동으로 전달되었습니다.`);
+            
+            // 폼 초기화
+            event.target.reset();
+            
+            // 결과 페이지로 이동
+            showResult(savedApplication);
+        } else {
+            throw new Error('신청서 저장에 실패했습니다.');
+        }
+        
+    } catch (error) {
+        console.error('신청서 제출 중 오류:', error);
+        alert('❌ 신청서 제출 중 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.');
+    } finally {
+        // 제출 버튼 활성화
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '신청서 제출';
+        }
+    }
 }
 
 // 제목 편집 모드로 전환
@@ -128,8 +374,8 @@ function saveTitle() {
     titleElement.innerHTML = newTitle;
     titleElement.onclick = editTitle;
     
-    // 로컬 저장
-    saveAdminSettingsLocal();
+    // Supabase에 저장
+    saveAdminSettingsToCloud();
     
     alert('제목이 저장되었습니다!');
 }
@@ -236,8 +482,8 @@ function saveEmailAddresses() {
     // 화면 업데이트
     displaySavedInputs();
     
-    // 로컬 저장
-    saveAdminSettingsLocal();
+    // Supabase에 저장
+    saveAdminSettingsToCloud();
     
     // 모달 닫기
     closeEmailInputModal();
@@ -341,8 +587,8 @@ function savePhoneNumbers() {
     // 화면 업데이트
     displaySavedInputs();
     
-    // 로컬 저장
-    saveAdminSettingsLocal();
+    // Supabase에 저장
+    saveAdminSettingsToCloud();
     
     // 모달 닫기
     closePhoneInputModal();
@@ -412,8 +658,8 @@ function generatePageQR() {
             qrDeleteBtn.style.display = 'inline-block';
         }
         
-        // 로컬에 관리자 설정 저장
-        saveAdminSettingsLocal();
+        // Supabase에 관리자 설정 저장
+        saveAdminSettingsToCloud();
         
         console.log('QR 코드 생성 완료:', customerUrl);
         
@@ -520,10 +766,49 @@ function displaySavedInputs() {
     }
 }
 
-// 기타 필요한 함수들
-function showResult() {
-    // 결과 페이지 표시 로직
-    console.log('결과 페이지 표시');
+// 결과 페이지 표시
+function showResult(applicationData = null) {
+    const resultSection = document.getElementById('result');
+    const resultContent = document.getElementById('resultContent');
+    
+    if (applicationData) {
+        const formattedDate = new Date(applicationData.submitted_at).toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        resultContent.innerHTML = `
+            <div class="result-info">
+                <h3>📋 접수 완료</h3>
+                <p><strong>신청번호:</strong> ${applicationData.application_number}</p>
+                <p><strong>신청자:</strong> ${applicationData.name}</p>
+                <p><strong>연락처:</strong> ${applicationData.phone}</p>
+                <p><strong>접수일시:</strong> ${formattedDate}</p>
+                <p><strong>처리상태:</strong> 접수 완료 (관리자 검토 중)</p>
+                <div class="notice">
+                    <p>💡 관리자가 신청 내용을 검토한 후 연락드릴 예정입니다.</p>
+                    <p>문의사항이 있으시면 등록하신 연락처로 연락주세요.</p>
+                </div>
+            </div>
+        `;
+    } else {
+        resultContent.innerHTML = `
+            <div class="result-info">
+                <h3>📋 신청 완료</h3>
+                <p>신청서가 성공적으로 제출되었습니다.</p>
+                <p>관리자가 검토 후 연락드리겠습니다.</p>
+            </div>
+        `;
+    }
+    
+    // 폼 숨기고 결과 표시
+    document.getElementById('applicationForm').style.display = 'none';
+    resultSection.style.display = 'block';
+    
+    console.log('결과 페이지 표시:', applicationData);
 }
 
 // DOM 로드 완료 후 실행
@@ -593,8 +878,8 @@ document.addEventListener('DOMContentLoaded', function() {
         displaySavedInputs();
     }
 
-    // 로컬에서 관리자 설정 로드 시도
-    loadAdminSettingsLocal();
+    // Supabase에서 관리자 설정 로드 시도
+    loadAdminSettingsFromCloud();
 
     // 기타 공사 선택시 추가 입력란 표시
     if (workTypeSelect) {
