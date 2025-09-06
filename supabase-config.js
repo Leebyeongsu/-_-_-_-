@@ -1,30 +1,35 @@
 // Supabase 클라이언트 설정
-// CDN을 통한 Supabase 클라이언트 로딩
 let supabase = null;
 
 // Supabase 클라이언트 초기화 함수
-async function initializeSupabase() {
+function initializeSupabase() {
     try {
-        // CDN에서 Supabase 클라이언트 로드
-        const { createClient } = await import('https://cdn.skypack.dev/@supabase/supabase-js');
-        
-        // ✅ Supabase 프로젝트 설정 (실제 값으로 교체 완료!)
-        const supabaseUrl = 'https://boorsqnfkwglzvnhtwcx.supabase.co';
-        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0';
-        
-        // Supabase 클라이언트 생성
-        supabase = createClient(supabaseUrl, supabaseAnonKey);
-        
-        console.log('Supabase 클라이언트 초기화 성공');
-        return supabase;
+        // CDN에서 로드된 Supabase 사용
+        if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+            const supabaseUrl = 'https://boorsqnfkwglzvnhtwcx.supabase.co';
+            const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvb3JzcW5ma3dnbHp2bmh0d2N4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1NDE3NDEsImV4cCI6MjA3MjExNzc0MX0.eU0BSY8u1b-qcx3OTgvGIW-EQHotI4SwNuWAg0eqed0';
+            
+            // Supabase 클라이언트 생성
+            supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+            
+            console.log('Supabase 클라이언트 초기화 성공');
+            return supabase;
+        } else {
+            console.warn('Supabase CDN이 로드되지 않았습니다.');
+            return null;
+        }
     } catch (error) {
         console.error('Supabase 클라이언트 초기화 실패:', error);
-        throw error;
+        return null;
     }
 }
 
-// 초기화 즉시 실행
-initializeSupabase();
+// 페이지 로드 후 초기화
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeSupabase);
+} else {
+    initializeSupabase();
+}
 
 // 데이터베이스 테이블 구조
 /*
@@ -69,8 +74,9 @@ CREATE TABLE notification_logs (
 */
 
 // Supabase Edge Functions 기본 URL (프로젝트 ref 기반)
-export const functionsBaseUrl = `https://boorsqnfkwglzvnhtwcx.functions.supabase.co`;
+const functionsBaseUrl = `https://boorsqnfkwglzvnhtwcx.functions.supabase.co`;
 
-// Supabase 클라이언트 내보내기 (초기화 완료 후 사용 가능)
-export { supabase };
-export { initializeSupabase };
+// 전역 변수로 노출
+window.supabaseClient = supabase;
+window.initializeSupabase = initializeSupabase;
+window.functionsBaseUrl = functionsBaseUrl;

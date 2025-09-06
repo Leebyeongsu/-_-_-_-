@@ -1,5 +1,4 @@
-// Supabase 설정 import
-import { supabase, initializeSupabase } from './supabase-config.js';
+// Supabase 설정은 supabase-config.js에서 전역 변수로 제공됨
 
 // 아파트 ID 설정 (고유 식별자)
 const APARTMENT_ID = 'gupo-apartment';
@@ -117,12 +116,108 @@ function loadAdminSettingsLocal() {
     }
 }
 
+// 로컬 저장 백업 (Supabase 실패 시)
+async function saveApplicationLocally(applicationData) {
+    try {
+        // 신청번호 생성
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const applicationNumber = `LOCAL-${dateStr}-${randomNum}`;
+
+        // 통신사 이름 변환
+        const providerNames = {
+            'interior': 'KT',
+            'exterior': 'SKT', 
+            'plumbing': 'LGU+',
+            'electrical': '기타(지역방송)'
+        };
+
+        const localApplication = {
+            application_number: applicationNumber,
+            name: applicationData.name,
+            phone: applicationData.phone,
+            address: applicationData.name,
+            work_type: applicationData.workType,
+            work_type_display: providerNames[applicationData.workType] || applicationData.workType,
+            start_date: applicationData.startDate || null,
+            description: applicationData.description || null,
+            submitted_at: applicationData.submittedAt,
+            status: 'local_backup' // 로컬 백업 표시
+        };
+
+        // localStorage에 저장
+        const existingApplications = JSON.parse(localStorage.getItem('localApplications') || '[]');
+        existingApplications.push(localApplication);
+        localStorage.setItem('localApplications', JSON.stringify(existingApplications));
+
+        console.log('신청서를 로컬에 백업했습니다:', localApplication);
+
+        // 로컬 알림 처리
+        await handleLocalNotification(localApplication);
+
+        return localApplication;
+    } catch (error) {
+        console.error('로컬 저장 중 오류:', error);
+        return false;
+    }
+}
+
+// 로컬 알림 처리 (이메일 주소를 콘솔에 출력)
+async function handleLocalNotification(applicationData) {
+    try {
+        const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+        const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+
+        const submittedDate = new Date(applicationData.submitted_at);
+        const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const notificationMessage = `
+[구포현대아파트] 새로운 통신환경개선 신청서 (로컬 백업)
+
+■ 신청번호: ${applicationData.application_number}
+■ 신청자: ${applicationData.name}
+■ 연락처: ${applicationData.phone}
+■ 동/호수: ${applicationData.address}
+■ 현재 통신사: ${applicationData.work_type_display}
+■ 희망일: ${applicationData.start_date || '미지정'}
+■ 상세내용: ${applicationData.description || '없음'}
+■ 접수일시: ${formattedDate}
+
+※ 이 신청서는 로컬에 저장되었습니다. 네트워크 연결 복구 후 수동으로 관리자에게 전달해주세요.
+        `;
+
+        console.log('=== 관리자 알림 ===');
+        console.log(notificationMessage);
+
+        if (savedEmails.length > 0) {
+            console.log('알림받을 이메일 주소:', savedEmails.join(', '));
+        }
+        if (savedPhones.length > 0) {
+            console.log('알림받을 전화번호:', savedPhones.join(', '));
+        }
+
+        return true;
+    } catch (error) {
+        console.error('로컬 알림 처리 중 오류:', error);
+        return false;
+    }
+}
+
 // 신청서를 Supabase에 저장하고 관리자에게 알림 발송
 async function saveApplicationToSupabase(applicationData) {
     try {
+        console.log('Supabase 연결 상태 확인:', supabase);
+        
         if (!supabase) {
-            console.warn('Supabase가 초기화되지 않았습니다.');
-            return false;
+            console.warn('Supabase가 초기화되지 않았습니다. 로컬 저장으로 대체합니다.');
+            return await saveApplicationLocally(applicationData);
         }
 
         // 신청번호 생성 (현재 날짜 + 랜덤 4자리)
@@ -162,7 +257,8 @@ async function saveApplicationToSupabase(applicationData) {
 
         if (insertError) {
             console.error('Supabase 신청서 저장 오류:', insertError);
-            return false;
+            console.log('로컬 저장으로 대체합니다.');
+            return await saveApplicationLocally(applicationData);
         }
 
         console.log('신청서가 Supabase에 저장되었습니다:', insertedApplication);
@@ -174,7 +270,8 @@ async function saveApplicationToSupabase(applicationData) {
 
     } catch (error) {
         console.error('신청서 저장 중 오류:', error);
-        return false;
+        console.log('로컬 저장으로 대체합니다.');
+        return await saveApplicationLocally(applicationData);
     }
 }
 
