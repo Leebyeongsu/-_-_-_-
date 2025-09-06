@@ -2,6 +2,9 @@
 
 고객이 신청서를 제출할 때 관리자에게 실제 이메일이 발송되도록 EmailJS를 설정하는 방법입니다.
 
+> **💡 참고**: 현재 시스템은 **Supabase Edge Functions**가 1차, **EmailJS**가 2차 백업으로 작동합니다.  
+> Edge Functions 설정이 어려우시면 EmailJS만으로도 완전히 작동합니다!
+
 ## 1. EmailJS 계정 생성
 
 1. [EmailJS 웹사이트](https://www.emailjs.com/)에서 계정을 생성하세요
@@ -56,23 +59,45 @@
 
 ## 4. 공개키 설정
 
-1. "Account" → "General" → "Public Key" 확인
-2. `script.js` 파일 수정:
+1. EmailJS 대시보드에서 **"Account"** → **"General"** → **"Public Key"** 확인
+2. 현재 `script.js` 19행에서 **임시 공개키**를 **실제 공개키**로 교체:
 
+**현재 코드:**
 ```javascript
-// 15-19행 부근 수정
-emailjs.init('YOUR_ACTUAL_PUBLIC_KEY'); // 실제 공개키로 교체
+emailjs.init('pGR5T6ZNnhBCECTrI'); // 임시 공개키
 ```
+
+**수정할 코드:**
+```javascript
+emailjs.init('YOUR_ACTUAL_PUBLIC_KEY'); // EmailJS에서 발급받은 실제 공개키로 교체
+```
+
+**⚠️ 중요**: 반드시 실제 EmailJS 공개키로 변경해야 이메일이 발송됩니다!
 
 ## 5. 서비스 ID 확인 및 수정
 
-`script.js` 파일의 338-342행 확인:
+`script.js` 파일의 **346-350행** 확인 및 수정:
 
+**현재 코드:**
 ```javascript
 const emailConfigs = [
-    { service: 'service_gmail', template: 'template_application' },  // 실제 Gmail 서비스 ID
-    { service: 'service_outlook', template: 'template_application' }, // 실제 Outlook 서비스 ID  
-    { service: 'default_service', template: 'default_template' }      // 기본 서비스 (있는 경우)
+    { service: 'service_gmail', template: 'template_application' },
+    { service: 'service_outlook', template: 'template_application' },
+    { service: 'default_service', template: 'default_template' }
+];
+```
+
+**수정할 내용:**
+- `service_gmail` → EmailJS에서 생성한 **실제 Gmail 서비스 ID**로 변경
+- `service_outlook` → EmailJS에서 생성한 **실제 Outlook 서비스 ID**로 변경  
+- `template_application` → 3단계에서 생성한 **실제 템플릿 ID**로 변경
+
+**수정 예시:**
+```javascript
+const emailConfigs = [
+    { service: 'service_abc123', template: 'template_application' }, // 실제 Gmail 서비스 ID
+    { service: 'service_xyz789', template: 'template_application' }, // 실제 Outlook 서비스 ID
+    { service: 'default_service', template: 'default_template' }     // 삭제 또는 실제 값으로 변경
 ];
 ```
 
@@ -90,16 +115,35 @@ const emailConfigs = [
 
 ## 7. 실제 설정 값 예시
 
-```javascript
-// 실제 설정 예시 (script.js 19행)
-emailjs.init('user_aBcDeFgHiJkLmNoPqRs'); // 실제 공개키
+### script.js 파일에서 수정해야 할 2곳:
 
-// 실제 서비스 설정 예시 (script.js 339행)
+**1️⃣ 공개키 설정 (19행):**
+```javascript
+// 변경 전
+emailjs.init('pGR5T6ZNnhBCECTrI'); // 임시 공개키
+
+// 변경 후 (실제 EmailJS 공개키로 교체)
+emailjs.init('user_aBcDeFgHiJkLmNoPqRs'); // 실제 공개키
+```
+
+**2️⃣ 서비스 설정 (347-349행):**
+```javascript
+// 변경 전
 const emailConfigs = [
-    { service: 'service_abc123', template: 'template_application' }, // Gmail 서비스
-    { service: 'service_xyz789', template: 'template_application' }  // 백업 서비스
+    { service: 'service_gmail', template: 'template_application' },
+    { service: 'service_outlook', template: 'template_application' },
+    { service: 'default_service', template: 'default_template' }
+];
+
+// 변경 후 (실제 서비스 ID로 교체)
+const emailConfigs = [
+    { service: 'service_abc123', template: 'template_application' }, // 실제 Gmail 서비스 ID
+    { service: 'service_xyz789', template: 'template_application' }  // 실제 Outlook 서비스 ID
+    // 세 번째 항목은 삭제하거나 실제 서비스로 교체
 ];
 ```
+
+**⚠️ 필수 수정사항**: 위 2곳을 반드시 수정해야 EmailJS가 작동합니다!
 
 ## 8. 문제 해결
 
@@ -123,13 +167,45 @@ const emailConfigs = [
 - 중요한 정보는 템플릿에 포함하지 말 것
 - 발송량 모니터링으로 남용 방지
 
-## 10. 현재 구현된 기능
+## 10. 현재 이메일 시스템 작동 방식
 
-✅ **다중 이메일 수신자 지원**
-✅ **여러 이메일 서비스 fallback**
-✅ **Supabase와 연동하여 발송 로그 저장**
-✅ **로컬 백업에서도 이메일 발송**
-✅ **스팸 방지를 위한 발송 간격 조절**
-✅ **상세한 오류 로그 및 디버깅 정보**
+### 🔄 **이중 발송 시스템**
+1. **1차**: Supabase Edge Functions (서버 사이드, 보안 강화)
+2. **2차**: EmailJS (클라이언트 사이드, 백업)
 
-이제 모든 설정이 완료되면 고객이 신청서를 제출할 때마다 관리자 이메일로 자동 발송됩니다!
+### 📋 **작동 순서**
+```
+고객 신청서 제출 
+    ↓
+Supabase에 저장 
+    ↓
+Edge Function 호출 시도
+    ↓
+성공 → SendGrid로 이메일 발송
+    ↓ (실패시)
+EmailJS로 백업 발송
+```
+
+### ✅ **구현된 기능**
+- ✅ **다중 이메일 수신자 지원** (관리자 여러 명)
+- ✅ **여러 이메일 서비스 fallback** (Gmail, Outlook 등)
+- ✅ **Supabase와 연동하여 발송 로그 저장**
+- ✅ **로컬 백업에서도 이메일 발송**
+- ✅ **스팸 방지를 위한 발송 간격 조절**
+- ✅ **상세한 오류 로그 및 디버깅 정보**
+
+### 🚀 **EmailJS만 사용하기**
+만약 Supabase Edge Functions 설정이 복잡하다면:
+1. **EmailJS 설정만 완료**하면 됩니다
+2. Edge Functions가 실패하면 **자동으로 EmailJS로 전환**
+3. 기능상 차이 없이 완전히 작동합니다!
+
+### 📧 **최종 확인 사항**
+✅ EmailJS 계정 생성 완료  
+✅ Gmail/Outlook 서비스 연결 완료  
+✅ 이메일 템플릿 생성 완료 (`template_application`)  
+✅ script.js의 공개키 수정 (19행)  
+✅ script.js의 서비스 ID 수정 (347-349행)  
+✅ 관리자 모드에서 이메일 주소 등록  
+
+이제 모든 설정이 완료되면 고객이 신청서를 제출할 때마다 **관리자 이메일로 자동 발송**됩니다! 🎉
