@@ -439,17 +439,14 @@ function generatePageQR() {
         return;
     }
     
-    // 현재 관리자 설정 가져오기
+    // 현재 관리자 설정 가져오기 (제목만)
     const title = localStorage.getItem('mainTitle') || '구포현대아파트 통신 환경 개선 신청서';
-    const subtitle = localStorage.getItem('mainSubtitle') || '통신 환경 개선을 위한 신청서를 작성해주세요';
-    const phones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
-    const emails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
     
-    console.log('관리자 설정:', { title, subtitle, phones, emails });
+    console.log('QR 코드용 제목:', title);
     
-    // 고객용 URL 생성 (관리자 설정 포함)
+    // 고객용 URL 생성 (제목만 포함)
     const currentUrl = window.location.origin + window.location.pathname;
-    const customerUrl = `${currentUrl}?customer=true&title=${encodeURIComponent(title)}&subtitle=${encodeURIComponent(subtitle)}&phones=${encodeURIComponent(phones.join(','))}&emails=${encodeURIComponent(emails.join(','))}`;
+    const customerUrl = `${currentUrl}?customer=true&title=${encodeURIComponent(title)}`;
     
     console.log('생성할 URL:', customerUrl);
     
@@ -605,37 +602,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 고객용 모드인 경우 QR 생성 버튼과 카카오톡 공유 버튼, 문자 버튼 숨기고 제출 버튼 텍스트 변경
     if (isCustomerMode) {
-        // URL 파라미터로 전달된 관리자 데이터(제목/부제목/연락처)를 localStorage에 주입하여
+        // URL 파라미터로 전달된 관리자 데이터(제목만)를 localStorage에 주입하여
         // 다른 기기(고객 폰)에서도 관리자 설정이 반영되도록 동기화
         (function syncAdminDataFromURL() {
             try {
-                const phonesParam = urlParams.get('phones');
-                const emailsParam = urlParams.get('emails');
                 const titleParam = urlParams.get('title');
-                const subtitleParam = urlParams.get('subtitle');
                 
-                if (phonesParam) {
-                    const phones = decodeURIComponent(phonesParam).split(',').map(p => p.trim()).filter(Boolean);
-                    if (phones.length > 0) {
-                        localStorage.setItem('savedPhoneNumbers', JSON.stringify(phones));
-                        // 호환 키 저장
-                        localStorage.setItem('adminPhone', phones[0]);
-                        localStorage.setItem('adminPhoneNumber', phones[0]);
-                    }
-                }
-                if (emailsParam) {
-                    const emails = decodeURIComponent(emailsParam).split(',').map(e => e.trim()).filter(Boolean);
-                    if (emails.length > 0) {
-                        localStorage.setItem('savedEmailAddresses', JSON.stringify(emails));
-                        // 호환 키 저장
-                        localStorage.setItem('adminEmail', emails[0]);
-                    }
-                }
                 if (titleParam) {
                     localStorage.setItem('mainTitle', decodeURIComponent(titleParam));
-                }
-                if (subtitleParam) {
-                    localStorage.setItem('mainSubtitle', decodeURIComponent(subtitleParam));
                 }
             } catch (e) {
                 console.warn('URL 기반 관리자 데이터 동기화 실패:', e);
