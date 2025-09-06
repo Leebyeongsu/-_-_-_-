@@ -1,20 +1,21 @@
-// Supabase 연동 추가
-import { supabase } from './supabase-config.js';
-import { saveAdminSettings, getAdminSettings, saveApplication, subscribeToApplications } from './supabase-api.js';
-import { sendApplicationNotification, sendFallbackNotification } from './notification-service.js';
-
 // 아파트 ID 설정 (고유 식별자)
 const APARTMENT_ID = 'gupo-apartment';
 
 // 카카오 SDK 초기화 (실제 앱키로 변경 필요)
-Kakao.init('YOUR_KAKAO_APP_KEY'); // 실제 카카오 개발자센터에서 발급받은 JavaScript 키로 변경하세요
+try {
+    if (typeof Kakao !== 'undefined' && Kakao && !Kakao.isInitialized()) {
+        Kakao.init('YOUR_KAKAO_APP_KEY'); // 실제 카카오 개발자센터에서 발급받은 JavaScript 키로 변경하세요
+    }
+} catch (e) {
+    console.warn('Kakao 초기화 건너뜀:', e && e.message ? e.message : e);
+}
 
 let formData = {};
 let currentQRDataURL = null;
 let adminSettings = null; // 관리자 설정 캐시
 
-// 관리자 설정 저장 (Supabase 연동)
-async function saveAdminSettingsToCloud() {
+// 관리자 설정 저장 (로컬 저장소)
+function saveAdminSettingsLocal() {
     try {
         const settings = {
             title: localStorage.getItem('mainTitle') || '',
@@ -22,47 +23,37 @@ async function saveAdminSettingsToCloud() {
             phones: JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]'),
             emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]')
         };
-
-        const result = await saveAdminSettings(APARTMENT_ID, settings);
         
-        if (result.success) {
-            console.log('관리자 설정이 클라우드에 저장되었습니다.');
-            adminSettings = result.data;
-        } else {
-            console.error('관리자 설정 저장 실패:', result.error);
-        }
+        console.log('관리자 설정이 로컬에 저장되었습니다.', settings);
+        adminSettings = settings;
     } catch (error) {
         console.error('관리자 설정 저장 중 오류:', error);
     }
 }
 
-// 관리자 설정 로드 (Supabase 연동)
-async function loadAdminSettingsFromCloud() {
+// 관리자 설정 로드 (로컬 저장소)
+function loadAdminSettingsLocal() {
     try {
-        const result = await getAdminSettings(APARTMENT_ID);
+        const settings = {
+            title: localStorage.getItem('mainTitle') || '',
+            subtitle: localStorage.getItem('mainSubtitle') || '',
+            phones: JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]'),
+            emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]')
+        };
         
-        if (result.success && result.data) {
-            adminSettings = result.data;
-            
-            // 로컬 저장소에 동기화
-            if (adminSettings.title) localStorage.setItem('mainTitle', adminSettings.title);
-            if (adminSettings.subtitle) localStorage.setItem('mainSubtitle', adminSettings.subtitle);
-            if (adminSettings.phones) localStorage.setItem('savedPhoneNumbers', JSON.stringify(adminSettings.phones));
-            if (adminSettings.emails) localStorage.setItem('savedEmailAddresses', JSON.stringify(adminSettings.emails));
-            
-            console.log('클라우드에서 관리자 설정을 로드했습니다.');
-            
-            // 화면 업데이트
-            loadSavedTitles();
-            displaySavedInputs();
-        }
+        adminSettings = settings;
+        console.log('로컬에서 관리자 설정을 로드했습니다.');
+        
+        // 화면 업데이트
+        loadSavedTitles();
+        displaySavedInputs();
     } catch (error) {
         console.error('관리자 설정 로드 중 오류:', error);
     }
 }
 
-// 고객용 신청서 제출 처리 (Supabase 연동)
-async function processCustomerFormSubmission(event) {
+// 고객용 신청서 제출 처리 (로컬 처리)
+function processCustomerFormSubmission(event) {
     event.preventDefault();
     const formDataObj = new FormData(event.target);
     const applicationData = {};
@@ -72,53 +63,25 @@ async function processCustomerFormSubmission(event) {
         applicationData[key] = value;
     }
     
+    // 유효성 검증
+    if (!applicationData.name || !applicationData.phone) {
+        alert('필수 항목을 모두 입력해주세요.');
+        return;
+    }
+    
     // 추가 정보 설정
     applicationData.submittedAt = new Date().toISOString();
     
-    try {
-        // 1. Supabase에 신청서 저장
-        const saveResult = await saveApplication(applicationData);
-        
-        if (!saveResult.success) {
-            throw new Error('신청서 저장 실패: ' + saveResult.error);
-        }
-        
-        // 2. 관리자 설정 로드 (클라우드에서)
-        await loadAdminSettingsFromCloud();
-        
-        // 3. 관리자에게 알림 발송
-        if (adminSettings) {
-            const notificationResults = await sendApplicationNotification(applicationData, adminSettings);
-            console.log('알림 발송 결과:', notificationResults);
-        } else {
-            // 폴백: 브라우저 기본 앱 사용하지 않음 (팝업 방지)
-            console.log('관리자 설정이 없어 폴백 알림을 건너뜁니다.');
-        }
-        
-        // 성공 메시지 표시
-        alert('✅ 신청서가 성공적으로 제출되었습니다!\n\n관리자에게 알림이 발송되었습니다.\n\n3초 후 웹페이지가 종료됩니다.');
-        
-        // 폼 초기화
-        event.target.reset();
-        
-        // 3초 후 웹 종료
-        setTimeout(() => {
-            if (confirm('신청서 제출이 완료되었습니다.\n\n웹페이지를 종료하시겠습니까?')) {
-                window.close();
-                // window.close()가 작동하지 않는 경우 (팝업이 아닌 경우)
-                if (!window.closed) {
-                    alert('웹페이지를 수동으로 닫아주세요.');
-                }
-            }
-        }, 3000);
-        
-        // 결과 페이지로 이동
-        showResult();
-        
-    } catch (error) {
-        console.error('신청서 처리 실패:', error);
-        alert('❌ 신청서 제출 중 오류가 발생했습니다.\n\n' + error.message);
-    }
+    console.log('신청서 제출:', applicationData);
+    
+    // 성공 메시지 표시
+    alert('✅ 신청서가 성공적으로 제출되었습니다!');
+    
+    // 폼 초기화
+    event.target.reset();
+    
+    // 결과 페이지로 이동
+    showResult();
 }
 
 // 제목 편집 모드로 전환
@@ -167,8 +130,8 @@ function saveTitle() {
     titleElement.innerHTML = newTitle;
     titleElement.onclick = editTitle;
     
-    // Supabase에 저장
-    saveAdminSettingsToCloud();
+    // 로컬 저장
+    saveAdminSettingsLocal();
     
     alert('제목이 저장되었습니다!');
 }
@@ -229,8 +192,8 @@ function saveSubtitle() {
     subtitleElement.innerHTML = newSubtitle;
     subtitleElement.onclick = editSubtitle;
     
-    // Supabase에 저장
-    saveAdminSettingsToCloud();
+    // 로컬 저장
+    saveAdminSettingsLocal();
     
     alert('부제목이 저장되었습니다!');
 }
@@ -335,8 +298,8 @@ function saveEmailAddresses() {
     // 화면 업데이트
     displaySavedInputs();
     
-    // Supabase에 저장
-    saveAdminSettingsToCloud();
+    // 로컬 저장
+    saveAdminSettingsLocal();
     
     // 모달 닫기
     closeEmailInputModal();
@@ -440,8 +403,8 @@ function savePhoneNumbers() {
     // 화면 업데이트
     displaySavedInputs();
     
-    // Supabase에 저장
-    saveAdminSettingsToCloud();
+    // 로컬 저장
+    saveAdminSettingsLocal();
     
     // 모달 닫기
     closePhoneInputModal();
@@ -514,8 +477,8 @@ function generatePageQR() {
             qrDeleteBtn.style.display = 'inline-block';
         }
         
-        // Supabase에 관리자 설정 저장
-        saveAdminSettingsToCloud();
+        // 로컬에 관리자 설정 저장
+        saveAdminSettingsLocal();
         
         console.log('QR 코드 생성 완료:', customerUrl);
         
@@ -721,8 +684,8 @@ document.addEventListener('DOMContentLoaded', function() {
         displaySavedInputs();
     }
 
-    // Supabase에서 관리자 설정 로드 시도
-    loadAdminSettingsFromCloud();
+    // 로컬에서 관리자 설정 로드 시도
+    loadAdminSettingsLocal();
 
     // 기타 공사 선택시 추가 입력란 표시
     if (workTypeSelect) {
