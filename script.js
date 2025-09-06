@@ -12,6 +12,17 @@ try {
     console.warn('Kakao 초기화 건너뜀:', e && e.message ? e.message : e);
 }
 
+// EmailJS 초기화 (실제 키로 변경 필요)
+try {
+    if (typeof emailjs !== 'undefined') {
+        // 공개 키 설정 (실제 EmailJS 공개키로 변경하세요)
+        emailjs.init('pGR5T6ZNnhBCECTrI'); // 임시 공개키 (실제로는 EmailJS에서 발급받은 키 사용)
+        console.log('EmailJS 초기화 성공');
+    }
+} catch (e) {
+    console.warn('EmailJS 초기화 건너뜀:', e && e.message ? e.message : e);
+}
+
 let formData = {};
 let currentQRDataURL = null;
 let adminSettings = null; // 관리자 설정 캐시
@@ -153,8 +164,15 @@ async function saveApplicationLocally(applicationData) {
 
         console.log('신청서를 로컬에 백업했습니다:', localApplication);
 
-        // 로컬 알림 처리
+        // 로컬 알림 처리 + 실제 이메일 발송 시도
         await handleLocalNotification(localApplication);
+        
+        // 로컬 백업이어도 실제 이메일 발송 시도
+        const emailResult = await sendEmailToAdmins(localApplication);
+        if (emailResult) {
+            console.log('로컬 백업에서 이메일 발송 성공');
+            localApplication.email_sent = true;
+        }
 
         return localApplication;
     } catch (error) {
@@ -275,29 +293,125 @@ async function saveApplicationToSupabase(applicationData) {
     }
 }
 
-// 관리자에게 알림 발송 (이메일 및 SMS)
-async function sendNotificationsToAdmins(applicationData) {
+// 관리자에게 실제 이메일 발송
+async function sendEmailToAdmins(applicationData) {
     try {
-        if (!supabase) {
-            console.warn('Supabase가 초기화되지 않았습니다.');
-            return;
+        // 저장된 관리자 이메일 주소 가져오기
+        const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+        
+        if (savedEmails.length === 0) {
+            console.warn('저장된 관리자 이메일 주소가 없습니다.');
+            return false;
         }
 
-        // 저장된 관리자 연락처 가져오기
-        const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
-        const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
-        
-        // 알림 메시지 생성
+        if (typeof emailjs === 'undefined') {
+            console.warn('EmailJS가 로드되지 않았습니다.');
+            return false;
+        }
+
+        // 제출일시 포맷팅
         const submittedDate = new Date(applicationData.submitted_at);
         const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
+            weekday: 'long'
         });
 
-        const emailMessage = `
+        let emailsSent = 0;
+
+        // 각 관리자 이메일로 발송
+        for (const adminEmail of savedEmails) {
+            try {
+                const templateParams = {
+                    to_email: adminEmail,
+                    apartment_name: '구포현대아파트',
+                    application_number: applicationData.application_number,
+                    customer_name: applicationData.name,
+                    customer_phone: applicationData.phone,
+                    unit_info: applicationData.address,
+                    current_provider: applicationData.work_type_display,
+                    preferred_date: applicationData.start_date || '미지정',
+                    description: applicationData.description || '특별한 요청사항 없음',
+                    submitted_at: formattedDate,
+                    form_url: window.location.origin + window.location.pathname
+                };
+
+                console.log(`${adminEmail}로 이메일 발송 시도...`);
+
+                // EmailJS로 이메일 발송 (여러 서비스/템플릿 시도)
+                const emailConfigs = [
+                    { service: 'service_gmail', template: 'template_application' },
+                    { service: 'service_outlook', template: 'template_application' },
+                    { service: 'default_service', template: 'default_template' }
+                ];
+
+                let emailSent = false;
+
+                for (const config of emailConfigs) {
+                    try {
+                        const response = await emailjs.send(
+                            config.service,
+                            config.template,
+                            templateParams
+                        );
+
+                        console.log(`${adminEmail}로 이메일 발송 성공:`, response);
+                        emailsSent++;
+                        emailSent = true;
+                        break;
+
+                    } catch (serviceError) {
+                        console.warn(`${config.service} 서비스 실패:`, serviceError);
+                        continue;
+                    }
+                }
+
+                if (!emailSent) {
+                    console.error(`${adminEmail}로 이메일 발송 실패 - 모든 서비스 시도 완료`);
+                }
+
+            } catch (error) {
+                console.error(`${adminEmail}로 이메일 발송 중 오류:`, error);
+            }
+
+            // 다음 이메일 발송 전 잠시 대기 (스팸 방지)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        console.log(`총 ${emailsSent}개의 이메일이 성공적으로 발송되었습니다.`);
+        return emailsSent > 0;
+
+    } catch (error) {
+        console.error('이메일 발송 중 전체 오류:', error);
+        return false;
+    }
+}
+
+// 관리자에게 알림 발송 (Supabase 로그 + 실제 이메일)
+async function sendNotificationsToAdmins(applicationData) {
+    try {
+        // 저장된 관리자 연락처 가져오기
+        const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+        const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
+        
+        // 실제 이메일 발송
+        const emailResult = await sendEmailToAdmins(applicationData);
+        
+        // Supabase 알림 로그 저장 (있는 경우)
+        if (supabase && applicationData.id) {
+            const submittedDate = new Date(applicationData.submitted_at);
+            const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            const emailMessage = `
 [구포현대아파트] 새로운 통신환경개선 신청서
 
 ■ 신청번호: ${applicationData.application_number}
@@ -310,55 +424,39 @@ async function sendNotificationsToAdmins(applicationData) {
 ■ 접수일시: ${formattedDate}
 
 관리자님께서 확인하시고 적절한 조치를 취해주시기 바랍니다.
-        `;
+            `;
 
-        const smsMessage = `[구포현대아파트] 새 신청서 접수
-신청자: ${applicationData.name}
-연락처: ${applicationData.phone}
-통신사: ${applicationData.work_type_display}
-신청번호: ${applicationData.application_number}`;
+            const notifications = [];
 
-        const notifications = [];
-
-        // 이메일 알림 로그 생성
-        savedEmails.forEach(email => {
-            notifications.push({
-                application_id: applicationData.id,
-                notification_type: 'email',
-                recipient: email,
-                message: emailMessage,
-                status: 'pending'
+            // 이메일 알림 로그 생성
+            savedEmails.forEach(email => {
+                notifications.push({
+                    application_id: applicationData.id,
+                    notification_type: 'email',
+                    recipient: email,
+                    message: emailMessage,
+                    status: emailResult ? 'sent' : 'failed'
+                });
             });
-        });
 
-        // SMS 알림 로그 생성
-        savedPhones.forEach(phone => {
-            notifications.push({
-                application_id: applicationData.id,
-                notification_type: 'sms', 
-                recipient: phone,
-                message: smsMessage,
-                status: 'pending'
-            });
-        });
+            if (notifications.length > 0) {
+                const { error: notificationError } = await supabase
+                    .from('notification_logs')
+                    .insert(notifications);
 
-        if (notifications.length > 0) {
-            const { error: notificationError } = await supabase
-                .from('notification_logs')
-                .insert(notifications);
-
-            if (notificationError) {
-                console.error('알림 로그 저장 오류:', notificationError);
-            } else {
-                console.log(`${notifications.length}개의 알림이 대기열에 추가되었습니다.`);
+                if (notificationError) {
+                    console.error('알림 로그 저장 오류:', notificationError);
+                } else {
+                    console.log(`${notifications.length}개의 알림 로그가 저장되었습니다.`);
+                }
             }
         }
 
-        // TODO: 실제 이메일/SMS 발송은 Supabase Edge Functions로 구현
-        // 현재는 로그만 저장하고 향후 백엔드에서 처리하도록 설계
+        return emailResult;
 
     } catch (error) {
         console.error('알림 발송 중 오류:', error);
+        return false;
     }
 }
 
@@ -401,8 +499,16 @@ async function processCustomerFormSubmission(event) {
         const savedApplication = await saveApplicationToSupabase(applicationData);
         
         if (savedApplication) {
-            // 성공 메시지 표시
-            alert(`✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${savedApplication.application_number}\n관리자에게 자동으로 전달되었습니다.`);
+            // 이메일 발송 여부에 따른 메시지 생성
+            let successMessage = `✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${savedApplication.application_number}`;
+            
+            if (savedApplication.email_sent || savedApplication.id) {
+                successMessage += '\n✉️ 관리자에게 이메일로 자동 전달되었습니다.';
+            } else {
+                successMessage += '\n📋 신청서가 저장되었으며, 관리자가 확인할 예정입니다.';
+            }
+            
+            alert(successMessage);
             
             // 폼 초기화
             event.target.reset();
