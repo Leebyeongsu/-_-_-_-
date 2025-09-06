@@ -19,7 +19,6 @@ function saveAdminSettingsLocal() {
     try {
         const settings = {
             title: localStorage.getItem('mainTitle') || '',
-            subtitle: localStorage.getItem('mainSubtitle') || '',
             phones: JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]'),
             emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]')
         };
@@ -36,7 +35,6 @@ function loadAdminSettingsLocal() {
     try {
         const settings = {
             title: localStorage.getItem('mainTitle') || '',
-            subtitle: localStorage.getItem('mainSubtitle') || '',
             phones: JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]'),
             emails: JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]')
         };
@@ -146,67 +144,7 @@ function cancelTitleEdit() {
     titleElement.onclick = editTitle;
 }
 
-// 부제목 편집 모드로 전환
-function editSubtitle() {
-    const subtitleElement = document.getElementById('mainSubtitle');
-    const currentSubtitle = subtitleElement.textContent;
-    
-    subtitleElement.innerHTML = `
-        <input type="text" id="subtitleInput" value="${currentSubtitle}" style="width: 100%; padding: 8px; border: 2px solid #4CAF50; border-radius: 4px; font-size: 16px;">
-    `;
-    
-    const subtitleInput = document.getElementById('subtitleInput');
-    subtitleInput.focus();
-    subtitleInput.select();
-    
-    // Enter 키로 저장, Esc 키로 취소
-    subtitleInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            saveSubtitle();
-        } else if (e.key === 'Escape') {
-            cancelSubtitleEdit();
-        }
-    });
-    
-    // 입력란에서 포커스가 벗어나면 자동 저장
-    subtitleInput.addEventListener('blur', function() {
-        saveSubtitle();
-    });
-}
-
-// 부제목 저장
-function saveSubtitle() {
-    const subtitleInput = document.getElementById('subtitleInput');
-    const newSubtitle = subtitleInput.value.trim();
-    
-    if (!newSubtitle) {
-        alert('부제목을 입력해주세요.');
-        return;
-    }
-    
-    // localStorage에 저장
-    localStorage.setItem('mainSubtitle', newSubtitle);
-    
-    // 부제목 업데이트 및 편집 모드 해제
-    const subtitleElement = document.getElementById('mainSubtitle');
-    subtitleElement.innerHTML = newSubtitle;
-    subtitleElement.onclick = editSubtitle;
-    
-    // 로컬 저장
-    saveAdminSettingsLocal();
-    
-    alert('부제목이 저장되었습니다!');
-}
-
-// 부제목 편집 취소
-function cancelSubtitleEdit() {
-    const subtitleElement = document.getElementById('mainSubtitle');
-    const savedSubtitle = localStorage.getItem('mainSubtitle') || '통신 환경 개선을 위한 신청서를 작성해주세요';
-    
-    // 편집 모드 해제하고 원래 상태로 복원
-    subtitleElement.innerHTML = savedSubtitle;
-    subtitleElement.onclick = editSubtitle;
-}
+// 부제목은 고정 텍스트로 변경됨 - 편집 기능 제거
 
 // 메일 입력 모달 표시
 function showEmailInputModal() {
@@ -529,20 +467,18 @@ function downloadQR(format) {
     link.click();
 }
 
-// 페이지 로드시 저장된 제목/부제목 불러오기
+// 페이지 로드시 저장된 제목 불러오기 (부제목은 고정)
 function loadSavedTitles() {
     const savedTitle = localStorage.getItem('mainTitle');
-    const savedSubtitle = localStorage.getItem('mainSubtitle');
     
     if (savedTitle) {
         const titleElement = document.getElementById('mainTitle');
         titleElement.textContent = savedTitle;
     }
     
-    if (savedSubtitle) {
-        const subtitleElement = document.getElementById('mainSubtitle');
-        subtitleElement.textContent = savedSubtitle;
-    }
+    // 부제목은 항상 고정 텍스트로 설정
+    const subtitleElement = document.getElementById('mainSubtitle');
+    subtitleElement.textContent = '신청서를 작성하여 제출해 주세요';
 }
 
 // 저장된 메일/폰번호 표시
@@ -633,13 +569,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // 고객용 제출 버튼 표시
         if (customerSubmitSection) customerSubmitSection.style.display = 'block';
         
-        // 저장된 제목/부제목이 있으면 우선 사용, 없으면 기본 문구 표시
+        // 저장된 제목이 있으면 우선 사용, 부제목은 고정
         const headerTitle = document.querySelector('header h1');
         const headerSubtext = document.querySelector('header p');
         const savedTitle = localStorage.getItem('mainTitle');
-        const savedSubtitle = localStorage.getItem('mainSubtitle');
         if (headerTitle) headerTitle.textContent = savedTitle || '📡 통신 환경 개선 신청서';
-        if (headerSubtext) headerSubtext.textContent = savedSubtitle || '아래 정보를 입력하여 신청서를 작성해주세요';
+        if (headerSubtext) headerSubtext.textContent = '신청서를 작성하여 제출해 주세요';
         
         console.log('고객용 모드로 실행됨');
     } else {
@@ -695,11 +630,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 모든 함수를 전역 스코프에 노출 (onclick 속성에서 사용하기 위해)
 window.editTitle = editTitle;
-window.editSubtitle = editSubtitle;
 window.saveTitle = saveTitle;
 window.cancelTitleEdit = cancelTitleEdit;
-window.saveSubtitle = saveSubtitle;
-window.cancelSubtitleEdit = cancelSubtitleEdit;
 window.showEmailInputModal = showEmailInputModal;
 window.addEmailInput = addEmailInput;
 window.removeEmailInput = removeEmailInput;
