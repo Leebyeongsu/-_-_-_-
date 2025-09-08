@@ -12,16 +12,30 @@ try {
     console.warn('Kakao 초기화 건너뜀:', e && e.message ? e.message : e);
 }
 
-// EmailJS 초기화 (실제 키로 변경 필요)
-try {
-    if (typeof emailjs !== 'undefined') {
-        // 공개 키 설정 (실제 EmailJS 공개키로 변경하세요)
-        emailjs.init('8-CeAZsTwQwNl4yE2'); // 실제 EmailJS 공개키
-        console.log('EmailJS 초기화 성공');
-    }
-} catch (e) {
-    console.warn('EmailJS 초기화 건너뜀:', e && e.message ? e.message : e);
+// EmailJS 초기화
+async function initializeEmailJS() {
+    return new Promise((resolve, reject) => {
+        try {
+            if (typeof emailjs === 'undefined') {
+                reject(new Error('EmailJS not loaded'));
+                return;
+            }
+            
+            // 공개 키 설정 (실제 EmailJS 공개키로 변경하세요)
+            emailjs.init('8-CeAZsTwQwNl4yE2');
+            console.log('✅ EmailJS 초기화 성공');
+            resolve(true);
+        } catch (e) {
+            console.error('❌ EmailJS 초기화 실패:', e);
+            reject(e);
+        }
+    });
 }
+
+// 초기화 실행
+initializeEmailJS().catch(error => {
+    console.warn('EmailJS 초기화 실패:', error.message);
+});
 
 let formData = {};
 let currentQRDataURL = null;
@@ -385,15 +399,15 @@ async function sendEmailToAdmins(applicationData) {
     }
 }
 
-// Supabase Edge Function을 통한 이메일 발송
+// EmailJS를 통한 이메일 발송 (주 시스템)
 async function sendNotificationsViaEdgeFunction(applicationData) {
     try {
-        if (!supabase) {
-            console.warn('🚫 Supabase가 초기화되지 않았습니다. EmailJS로 대체합니다.');
-            return await sendEmailToAdmins(applicationData);
+        if (!emailjs) {
+            console.warn('🚫 EmailJS가 초기화되지 않았습니다. SendGrid로 대체합니다.');
+            return await sendViaSendGrid(applicationData);
         }
 
-        console.log('📨 Edge Function 호출 시작');
+        console.log('📨 이메일 발송 시작');
         console.log('📋 신청서 데이터:', applicationData);
         console.log('🔑 신청서 ID:', applicationData.id);
 
@@ -407,41 +421,57 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
 
         if (adminError || !adminCheck?.emails || adminCheck.emails.length === 0) {
             console.error('❌ 관리자 이메일 설정 문제:', adminError?.message);
-            console.log('📧 EmailJS로 대체 시도...');
-            return await sendEmailToAdmins(applicationData);
+            throw new Error('관리자 이메일 설정을 찾을 수 없습니다.');
         }
 
         console.log('✅ 관리자 이메일 확인됨:', adminCheck.emails);
 
-        // Edge Function 호출
-        console.log('🚀 Edge Function 호출 중...');
-        const { data, error } = await supabase.functions.invoke('send-notification', {
-            body: { 
-                application_id: applicationData.id
+        // EmailJS로 메일 발송
+        const results = await Promise.all(adminCheck.emails.map(async (email) => {
+            try {
+                const result = await emailjs.send(
+                    'service_gupo',  // EmailJS 서비스 ID
+                    'template_application',  // EmailJS 템플릿 ID
+                    {
+                        to_email: email,
+                        application_number: applicationData.application_number,
+                        name: applicationData.name,
+                        phone: applicationData.phone,
+                        address: applicationData.address,
+                        work_type: applicationData.work_type_display,
+                        start_date: applicationData.start_date || '미지정',
+                        description: applicationData.description || '없음',
+                        submitted_at: new Date(applicationData.submitted_at).toLocaleString('ko-KR')
+                    }
+                );
+                await logEmailAttempt(applicationData.id, 'emailjs', 'sent');
+                return { email, success: true, result };
+            } catch (error) {
+                await logEmailAttempt(applicationData.id, 'emailjs', 'failed', error.message);
+                return { email, success: false, error };
             }
-        });
+        }));
 
-        if (error) {
-            console.error('❌ Edge Function 호출 오류:', error);
-            console.log('📧 EmailJS로 대체 시도...');
-            return await sendEmailToAdmins(applicationData);
+        // 발송 결과 처리
+        const successfulSends = results.filter(r => r.success).length;
+        const totalAttempts = results.length;
+
+        // 모든 이메일 발송이 실패한 경우 SendGrid로 폴백
+        if (successfulSends === 0) {
+            console.warn('⚠️ EmailJS 발송 실패. SendGrid로 대체 시도...');
+            return await sendViaSendGrid(applicationData);
         }
 
-        console.log('📨 Edge Function 응답:', data);
-        
-        if (data?.success) {
-            console.log(`✅ Edge Function으로 ${data.sent}/${data.total}개 이메일 발송 성공`);
-            return true;
-        } else {
-            console.warn('⚠️ Edge Function 실행 실패:', data);
-            console.log('📧 EmailJS로 대체 시도...');
-            return await sendEmailToAdmins(applicationData);
-        }
+        return {
+            success: true,
+            sent: successfulSends,
+            total: totalAttempts
+        };
 
     } catch (error) {
-        console.error('💥 Edge Function 실행 중 오류:', error);
-        console.log('📧 EmailJS로 대체 시도...');
-        return await sendEmailToAdmins(applicationData);
+        console.error('💥 EmailJS 발송 중 오류:', error);
+        console.log('� SendGrid로 대체 시도...');
+        return await sendViaSendGrid(applicationData);
     }
 }
 

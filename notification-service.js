@@ -104,30 +104,39 @@ export async function sendSMS(phoneNumber, message) {
     }
 }
 
-// 이메일 발송 (텍스트 전용) - Supabase Edge Function 호출
-export async function sendEmail(emailAddress, subject, textBody) {
+// 이메일 발송 로그 관리
+export async function logEmailAttempt(applicationId, provider, status, error = null) {
     try {
-        const { data, error } = await supabase.functions.invoke('send-email', {
-            // HTML 본문은 사용하지 않습니다 (텍스트 전용)
-            body: { to: emailAddress, subject, text: textBody }
+        await supabase.from('notification_logs').insert([{
+            application_id: applicationId,
+            provider: provider, // 'emailjs' 또는 'sendgrid'
+            status: status,
+            error: error,
+            timestamp: new Date().toISOString()
+        }]);
+    } catch (err) {
+        console.error('로그 저장 실패:', err);
+    }
+}
+
+// SendGrid를 통한 백업 발송 함수
+export async function sendViaSendGrid(applicationData) {
+    try {
+        console.log('📨 SendGrid를 통한 백업 발송 시도...');
+        
+        const { data, error } = await supabase.functions.invoke('send-notification-sendgrid', {
+            body: { application_id: applicationData.id }
         });
 
-        await saveNotificationLog({
-            notification_type: 'email',
-            recipient: emailAddress,
-            message: subject,
-            status: error ? 'failed' : 'sent'
-        });
+        if (error) {
+            await logEmailAttempt(applicationData.id, 'sendgrid', 'failed', error.message);
+            throw error;
+        }
 
-        return { success: !error, result: data, error };
+        await logEmailAttempt(applicationData.id, 'sendgrid', 'sent');
+        return data;
     } catch (error) {
-        console.error('이메일 발송 실패:', error);
-        await saveNotificationLog({
-            notification_type: 'email',
-            recipient: emailAddress,
-            message: subject,
-            status: 'failed'
-        });
+        console.error('SendGrid 발송 실패:', error);
         return { success: false, error: error.message };
     }
 }
