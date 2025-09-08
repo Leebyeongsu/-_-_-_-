@@ -888,6 +888,15 @@ function generatePageQR() {
     console.log('QR 코드용 단순화된 URL:', customerUrl);
     console.log('URL 길이:', customerUrl.length, '자');
     
+    // URL이 너무 긴 경우 더 단축
+    if (customerUrl.length > 800) {
+        console.warn('URL이 너무 깁니다. 더 단축합니다.');
+        // 짧은 URL 사용
+        const shortUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?customer=true`;
+        console.log('더 단축된 URL:', shortUrl, '길이:', shortUrl.length);
+        return generateQRWithShortUrl(shortUrl, qrCodeDiv, qrSection, qrDeleteBtn);
+    }
+    
     try {
         console.log('QR 코드 생성 시작');
         qrCodeDiv.innerHTML = '';
@@ -920,6 +929,63 @@ function generatePageQR() {
         } catch (error) {
         console.error('QR 코드 생성 중 오류:', error);
         alert('QR 코드 생성 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// 짧은 URL로 QR 생성
+function generateQRWithShortUrl(shortUrl, qrCodeDiv, qrSection, qrDeleteBtn) {
+    try {
+        console.log('짧은 URL로 QR 코드 생성:', shortUrl);
+        qrCodeDiv.innerHTML = '';
+        
+        new QRCode(qrCodeDiv, {
+            text: shortUrl,
+            width: 250,
+            height: 250,
+            colorDark: "#000000",
+            colorLight: "#FFFFFF",
+            correctLevel: QRCode.CorrectLevel.L, // 낮은 오류 수정 레벨로 변경
+            margin: 2
+        });
+        
+        console.log('짧은 URL QR 코드 생성 완료');
+        
+        // QR 섹션 표시
+        qrSection.style.display = 'block';
+        
+        // QR 삭제 버튼 표시
+        if (qrDeleteBtn) {
+            qrDeleteBtn.style.display = 'inline-block';
+        }
+        
+        // Supabase에 관리자 설정 저장
+        saveAdminSettingsToCloud();
+        
+        console.log('짧은 URL QR 코드 생성 완료:', shortUrl);
+        
+    } catch (error) {
+        console.error('짧은 URL QR 코드 생성 중 오류:', error);
+        
+        // 최후의 수단: 더 간단한 URL
+        const simpleUrl = `${window.location.protocol}//${window.location.hostname}?customer=1`;
+        console.log('최종 단순 URL 시도:', simpleUrl);
+        
+        try {
+            qrCodeDiv.innerHTML = '';
+            new QRCode(qrCodeDiv, {
+                text: simpleUrl,
+                width: 200,
+                height: 200,
+                correctLevel: QRCode.CorrectLevel.L
+            });
+            
+            qrSection.style.display = 'block';
+            if (qrDeleteBtn) qrDeleteBtn.style.display = 'inline-block';
+            
+        } catch (finalError) {
+            console.error('최종 QR 생성 실패:', finalError);
+            alert('QR 코드 생성에 실패했습니다. URL이 너무 긴 것 같습니다.');
+        }
     }
 }
 
