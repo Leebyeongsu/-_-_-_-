@@ -362,6 +362,15 @@ async function saveApplicationToSupabase(applicationData) {
 // 관리자에게 실제 이메일 발송
 async function sendEmailToAdmins(applicationData) {
     try {
+        console.log('📧 이메일 발송 시도 - 상세 정보:', {
+            timestamp: new Date().toISOString(),
+            applicationId: applicationData.id || 'ID 없음',
+            deviceType: /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+            emailJSState: {
+                available: typeof emailjs !== 'undefined',
+                initialized: emailJSInitialized
+            }
+        });
         // 저장된 관리자 이메일 주소 가져오기
         const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
         
@@ -453,8 +462,29 @@ async function sendEmailToAdmins(applicationData) {
 // EmailJS를 통한 이메일 발송 (주 시스템)
 async function sendNotificationsViaEdgeFunction(applicationData) {
     try {
+        console.log('📱 메일 발송 시작 - 디버그 정보:', {
+            deviceInfo: {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                isMobile: /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+            },
+            networkState: {
+                isOnline: navigator.onLine,
+                connection: navigator.connection ? {
+                    type: navigator.connection.type,
+                    effectiveType: navigator.connection.effectiveType,
+                    downlink: navigator.connection.downlink
+                } : 'Connection API not supported'
+            },
+            emailJSState: {
+                initialized: emailJSInitialized,
+                attempts: initializationAttempts
+            }
+        });
+
         // 네트워크 상태 확인
         if (!navigator.onLine) {
+            console.error('🔴 네트워크 오프라인 상태');
             throw new Error('네트워크 연결이 필요합니다.');
         }
 
@@ -463,8 +493,10 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
             console.log('📨 EmailJS 초기화 시도 중...');
             try {
                 await initializeEmailJS();
+                console.log('✅ EmailJS 초기화 성공');
             } catch (initError) {
-                console.warn('🚫 EmailJS 초기화 실패, SendGrid로 대체합니다.');
+                console.error('� EmailJS 초기화 실패:', initError);
+                console.warn('🚫 SendGrid로 대체합니다.');
                 return await sendViaSendGrid(applicationData);
             }
         }
@@ -623,6 +655,25 @@ async function sendNotificationsToAdmins(applicationData) {
 // 고객용 신청서 제출 처리 (Supabase 저장 및 알림 발송)
 async function processCustomerFormSubmission(event) {
     event.preventDefault();
+    console.log('📝 신청서 제출 시작 - 환경 정보:', {
+        시간: new Date().toISOString(),
+        브라우저: {
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            onLine: navigator.onLine,
+            platform: navigator.platform
+        },
+        화면: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            pixelRatio: window.devicePixelRatio
+        },
+        이메일상태: {
+            EmailJS초기화: emailJSInitialized,
+            시도횟수: initializationAttempts
+        }
+    });
+
     const formDataObj = new FormData(event.target);
     const applicationData = {};
     
