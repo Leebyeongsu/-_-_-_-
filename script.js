@@ -16,7 +16,7 @@ try {
 try {
     if (typeof emailjs !== 'undefined') {
         // 공개 키 설정 (실제 EmailJS 공개키로 변경하세요)
-        emailjs.init('pGR5T6ZNnhBCECTrI'); // 임시 공개키 (실제로는 EmailJS에서 발급받은 키 사용)
+        emailjs.init('8-CeAZsTwQwNl4yE2'); // 실제 EmailJS 공개키
         console.log('EmailJS 초기화 성공');
     }
 } catch (e) {
@@ -323,8 +323,8 @@ async function sendEmailToAdmins(applicationData) {
 
         let emailsSent = 0;
 
-        // 실제 EmailJS 계정이 없어도 작동하도록 브라우저 알림으로 대체
-        console.log('⚠️ EmailJS가 설정되지 않았으므로 브라우저 알림으로 관리자에게 알림을 표시합니다.');
+        // 각 관리자 이메일로 EmailJS 발송
+        console.log('📧 EmailJS로 관리자에게 이메일 발송을 시도합니다.');
         
         // 브라우저 알림 권한 요청
         if ('Notification' in window) {
@@ -340,36 +340,40 @@ async function sendEmailToAdmins(applicationData) {
             }
         }
 
-        // 콘솔에 이메일 내용 표시
+        // 실제 EmailJS로 이메일 발송
         for (const adminEmail of savedEmails) {
-            console.log(`
-📧 ${adminEmail}로 전송할 이메일 내용:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-제목: [구포현대아파트] 새 통신환경개선 신청서 - ${applicationData.application_number}
+            try {
+                console.log(`📧 ${adminEmail}로 EmailJS 이메일 발송 시도...`);
 
-안녕하세요, 관리자님
+                // EmailJS 템플릿 파라미터
+                const templateParams = {
+                    to_email: adminEmail,
+                    apartment_name: '구포현대아파트',
+                    application_number: applicationData.application_number,
+                    name: applicationData.name,
+                    phone: applicationData.phone,
+                    work_type_display: applicationData.work_type_display,
+                    start_date: applicationData.start_date || '미지정',
+                    description: applicationData.description || '특별한 요청사항 없음',
+                    submittedAt: formattedDate
+                };
 
-새로운 통신환경개선 신청서가 접수되었습니다.
+                // EmailJS로 이메일 발송
+                const response = await emailjs.send(
+                    'service_v90gm26',      // Service ID
+                    'template_application', // Template ID  
+                    templateParams
+                );
 
-■ 신청 정보
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• 신청번호: ${applicationData.application_number}
-• 신청자: ${applicationData.name}
-• 연락처: ${applicationData.phone}
-• 동/호수: ${applicationData.address}
-• 현재 통신사: ${applicationData.work_type_display}
-• 희망 공사일: ${applicationData.start_date || '미지정'}
-• 상세 요청사항: ${applicationData.description || '특별한 요청사항 없음'}
-• 제출일시: ${formattedDate}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                console.log(`✅ ${adminEmail}로 이메일 발송 성공:`, response);
+                emailsSent++;
 
-관리자님께서 신청 내용을 확인하시고 적절한 조치를 취해주시기 바랍니다.
+            } catch (error) {
+                console.error(`❌ ${adminEmail}로 이메일 발송 실패:`, error);
+            }
 
-※ 실제 EmailJS 계정이 설정되면 자동으로 이메일이 발송됩니다.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            `);
-            
-            emailsSent++; // 알림 표시됨으로 처리
+            // 다음 이메일 발송 전 잠시 대기 (스팸 방지)
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
         console.log(`총 ${emailsSent}개의 이메일이 성공적으로 발송되었습니다.`);
