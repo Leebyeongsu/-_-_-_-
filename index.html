@@ -222,6 +222,92 @@
         if(location.search.indexOf('debug=true') > -1) {
             eruda.init();
             console.log('🔍 모바일 디버그 모드가 활성화되었습니다.');
+            
+            // 오류 로깅을 위한 특별 함수 추가
+            window.logError = function(error) {
+                // 복사 가능한 형식으로 오류 출력
+                const errorLog = `
+=== 오류 로그 ===
+시간: ${new Date().toLocaleString()}
+오류 메시지: ${error.message || '메시지 없음'}
+오류 스택: ${error.stack || '스택 정보 없음'}
+브라우저: ${navigator.userAgent}
+URL: ${window.location.href}
+=================
+                `.trim();
+                
+                // 콘솔에 출력
+                console.error(errorLog);
+                
+                // 화면에 복사 가능한 오류 메시지 표시
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    bottom: 80px;
+                    left: 10px;
+                    right: 10px;
+                    background: #fff;
+                    border: 2px solid #ff4444;
+                    border-radius: 8px;
+                    padding: 15px;
+                    font-family: monospace;
+                    white-space: pre-wrap;
+                    z-index: 1000000;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    font-size: 12px;
+                `;
+                
+                const copyButton = document.createElement('button');
+                copyButton.textContent = '오류 내용 복사';
+                copyButton.style.cssText = `
+                    background: #ff4444;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    margin-bottom: 10px;
+                    width: 100%;
+                `;
+                
+                const closeButton = document.createElement('button');
+                closeButton.textContent = '창 닫기';
+                closeButton.style.cssText = `
+                    background: #666;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    margin-top: 10px;
+                    width: 100%;
+                `;
+                
+                errorDiv.appendChild(copyButton);
+                errorDiv.appendChild(document.createElement('pre')).textContent = errorLog;
+                errorDiv.appendChild(closeButton);
+                
+                document.body.appendChild(errorDiv);
+                
+                copyButton.onclick = () => {
+                    navigator.clipboard.writeText(errorLog).then(() => {
+                        copyButton.textContent = '복사됨!';
+                        setTimeout(() => copyButton.textContent = '오류 내용 복사', 2000);
+                    });
+                };
+                
+                closeButton.onclick = () => errorDiv.remove();
+            };
+
+            // 전역 에러 핸들러 설정
+            window.onerror = function(msg, url, lineNo, columnNo, error) {
+                window.logError(error || new Error(msg));
+                return false;
+            };
+
+            // Promise 에러 핸들러 설정
+            window.addEventListener('unhandledrejection', function(event) {
+                window.logError(event.reason);
+            });
         }
     </script>
     <!-- JavaScript -->
