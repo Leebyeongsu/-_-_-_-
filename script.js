@@ -12,29 +12,80 @@ try {
     console.warn('Kakao 초기화 건너뜀:', e && e.message ? e.message : e);
 }
 
-// EmailJS 초기화
+// EmailJS 초기화 상태
+let emailJSInitialized = false;
+let initializationAttempts = 0;
+const MAX_INIT_ATTEMPTS = 3;
+
+// EmailJS 초기화 함수
 async function initializeEmailJS() {
     return new Promise((resolve, reject) => {
-        try {
-            if (typeof emailjs === 'undefined') {
-                reject(new Error('EmailJS not loaded'));
-                return;
-            }
-            
-            // 공개 키 설정 (실제 EmailJS 공개키로 변경하세요)
-            emailjs.init('8-CeAZsTwQwNl4yE2');
-            console.log('✅ EmailJS 초기화 성공');
+        // 이미 초기화되었다면 바로 성공 반환
+        if (emailJSInitialized) {
             resolve(true);
-        } catch (e) {
-            console.error('❌ EmailJS 초기화 실패:', e);
-            reject(e);
+            return;
         }
+
+        // 최대 시도 횟수 체크
+        if (initializationAttempts >= MAX_INIT_ATTEMPTS) {
+            reject(new Error('EmailJS 초기화 최대 시도 횟수 초과'));
+            return;
+        }
+
+        initializationAttempts++;
+
+        const initializeWithRetry = () => {
+            try {
+                if (typeof emailjs === 'undefined') {
+                    // 스크립트가 아직 로드되지 않은 경우, 재시도
+                    setTimeout(() => {
+                        console.log(`EmailJS 스크립트 로딩 대기 중... (시도: ${initializationAttempts})`);
+                        initializeWithRetry();
+                    }, 1000);
+                    return;
+                }
+
+                // 공개 키 설정
+                emailjs.init('8-CeAZsTwQwNl4yE2');
+                console.log('✅ EmailJS 초기화 성공');
+                emailJSInitialized = true;
+                resolve(true);
+            } catch (e) {
+                console.error('❌ EmailJS 초기화 실패:', e);
+                if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+                    // 실패시 1초 후 재시도
+                    setTimeout(initializeWithRetry, 1000);
+                } else {
+                    reject(e);
+                }
+            }
+        };
+
+        // 네트워크 상태 확인
+        if (!navigator.onLine) {
+            reject(new Error('네트워크 연결이 필요합니다.'));
+            return;
+        }
+
+        // 초기화 시작
+        initializeWithRetry();
     });
 }
 
-// 초기화 실행
-initializeEmailJS().catch(error => {
-    console.warn('EmailJS 초기화 실패:', error.message);
+// 페이지 로드시 초기화 시도
+window.addEventListener('load', () => {
+    initializeEmailJS().catch(error => {
+        console.warn('EmailJS 초기화 실패:', error.message);
+    });
+});
+
+// 온라인 상태가 되면 재시도
+window.addEventListener('online', () => {
+    if (!emailJSInitialized) {
+        initializeEmailJS().catch(error => {
+            console.warn('EmailJS 재초기화 실패:', error.message);
+        });
+    }
 });
 
 let formData = {};
@@ -402,14 +453,38 @@ async function sendEmailToAdmins(applicationData) {
 // EmailJS를 통한 이메일 발송 (주 시스템)
 async function sendNotificationsViaEdgeFunction(applicationData) {
     try {
+        // 네트워크 상태 확인
+        if (!navigator.onLine) {
+            throw new Error('네트워크 연결이 필요합니다.');
+        }
+
+        // EmailJS 초기화 상태 확인 및 재시도
+        if (!emailJSInitialized) {
+            console.log('📨 EmailJS 초기화 시도 중...');
+            try {
+                await initializeEmailJS();
+            } catch (initError) {
+                console.warn('🚫 EmailJS 초기화 실패, SendGrid로 대체합니다.');
+                return await sendViaSendGrid(applicationData);
+            }
+        }
+
         if (!emailjs) {
-            console.warn('🚫 EmailJS가 초기화되지 않았습니다. SendGrid로 대체합니다.');
+            console.warn('🚫 EmailJS 사용 불가, SendGrid로 대체합니다.');
             return await sendViaSendGrid(applicationData);
         }
 
         console.log('📨 이메일 발송 시작');
         console.log('📋 신청서 데이터:', applicationData);
         console.log('🔑 신청서 ID:', applicationData.id);
+        
+        // 모바일 환경 로깅
+        console.log('📱 사용자 환경:', {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            vendor: navigator.vendor,
+            isMobile: /Mobile|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent)
+        });
 
         // 관리자 설정 확인
         console.log('👑 현재 관리자 설정 확인...');
@@ -1161,11 +1236,44 @@ function showResult(applicationData = null) {
     console.log('결과 페이지 표시:', applicationData);
 }
 
+// 모바일 환경 최적화 함수
+function optimizeForMobile() {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+        // 입력 필드 포커스 시 자동 스크롤 처리
+        const inputs = document.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('focus', () => {
+                setTimeout(() => {
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
+            });
+        });
+
+        // 가상 키보드 표시 시 스크롤 조정
+        const container = document.querySelector('.container');
+        window.addEventListener('resize', () => {
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'TEXTAREA') {
+                window.scrollTo(0, 0);
+                document.activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        // 터치 이벤트 최적화
+        document.addEventListener('touchstart', function() {}, {passive: true});
+    }
+}
+
 // DOM 로드 완료 후 실행
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('applicationForm');
     const workTypeSelect = document.getElementById('workType');
     const otherWorkTypeDiv = document.getElementById('otherWorkType');
+    
+    // 모바일 최적화 실행
+    optimizeForMobile();
     
     // URL 파라미터 확인하여 고객용/관리자용 모드 결정
     const urlParams = new URLSearchParams(window.location.search);
