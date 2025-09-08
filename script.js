@@ -395,13 +395,32 @@ async function sendEmailToAdmins(applicationData) {
 async function sendNotificationsViaEdgeFunction(applicationData) {
     try {
         if (!supabase) {
-            console.warn('Supabase가 초기화되지 않았습니다. EmailJS로 대체합니다.');
+            console.warn('🚫 Supabase가 초기화되지 않았습니다. EmailJS로 대체합니다.');
             return await sendEmailToAdmins(applicationData);
         }
 
-        console.log('Supabase Edge Function 호출:', applicationData.id);
+        console.log('📨 Edge Function 호출 시작');
+        console.log('📋 신청서 데이터:', applicationData);
+        console.log('🔑 신청서 ID:', applicationData.id);
+
+        // 관리자 설정 확인
+        console.log('👑 현재 관리자 설정 확인...');
+        const { data: adminCheck, error: adminError } = await supabase
+            .from('admin_settings')
+            .select('emails')
+            .eq('apartment_id', APARTMENT_ID)
+            .single();
+
+        if (adminError || !adminCheck?.emails || adminCheck.emails.length === 0) {
+            console.error('❌ 관리자 이메일 설정 문제:', adminError?.message);
+            console.log('📧 EmailJS로 대체 시도...');
+            return await sendEmailToAdmins(applicationData);
+        }
+
+        console.log('✅ 관리자 이메일 확인됨:', adminCheck.emails);
 
         // Edge Function 호출
+        console.log('🚀 Edge Function 호출 중...');
         const { data, error } = await supabase.functions.invoke('send-notification', {
             body: { 
                 application_id: applicationData.id
@@ -409,24 +428,25 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
         });
 
         if (error) {
-            console.error('Edge Function 호출 오류:', error);
-            console.log('EmailJS로 대체 시도...');
+            console.error('❌ Edge Function 호출 오류:', error);
+            console.log('📧 EmailJS로 대체 시도...');
             return await sendEmailToAdmins(applicationData);
         }
 
-        console.log('Edge Function 응답:', data);
+        console.log('📨 Edge Function 응답:', data);
         
         if (data?.success) {
-            console.log(`Edge Function으로 ${data.sent}/${data.total}개 이메일 발송 성공`);
+            console.log(`✅ Edge Function으로 ${data.sent}/${data.total}개 이메일 발송 성공`);
             return true;
         } else {
-            console.warn('Edge Function 실행 실패, EmailJS로 대체 시도...');
+            console.warn('⚠️ Edge Function 실행 실패:', data);
+            console.log('📧 EmailJS로 대체 시도...');
             return await sendEmailToAdmins(applicationData);
         }
 
     } catch (error) {
-        console.error('Edge Function 실행 중 오류:', error);
-        console.log('EmailJS로 대체 시도...');
+        console.error('💥 Edge Function 실행 중 오류:', error);
+        console.log('📧 EmailJS로 대체 시도...');
         return await sendEmailToAdmins(applicationData);
     }
 }
