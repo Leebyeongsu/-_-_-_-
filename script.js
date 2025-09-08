@@ -881,16 +881,12 @@ function generatePageQR() {
         return;
     }
     
-    // 현재 관리자 설정 가져오기 (제목만)
-    const title = localStorage.getItem('mainTitle') || '구포현대아파트 통신 환경 개선 신청서';
-    
-    console.log('QR 코드용 제목:', title);
-    
-    // 고객용 URL 생성 (제목만 포함)
+    // 고객용 URL 생성 (간단하게)
     const currentUrl = window.location.origin + window.location.pathname;
-    const customerUrl = `${currentUrl}?customer=true&title=${encodeURIComponent(title)}`;
+    const customerUrl = `${currentUrl}?customer=true`;
     
-    console.log('생성할 URL:', customerUrl);
+    console.log('QR 코드용 단순화된 URL:', customerUrl);
+    console.log('URL 길이:', customerUrl.length, '자');
     
     try {
         console.log('QR 코드 생성 시작');
