@@ -361,7 +361,7 @@ async function sendEmailToAdmins(applicationData) {
                 // EmailJS로 이메일 발송
                 const response = await emailjs.send(
                     'service_v90gm26',      // Service ID
-                    'template_application', // Template ID  
+                    'template_pxi385c',     // Template ID  
                     templateParams
                 );
 
