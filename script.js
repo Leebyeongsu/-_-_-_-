@@ -228,7 +228,7 @@ async function saveApplicationLocally(applicationData) {
             phone: applicationData.phone,
             work_type: applicationData.workType,
             work_type_display: providerNames[applicationData.workType] || applicationData.workType,
-            start_date: applicationData.startDate || null,
+            startDate: applicationData.startDate || null,
             description: applicationData.description || null,
             submitted_at: applicationData.submittedAt,
             status: 'local_backup' // 로컬 백업 표시
@@ -281,7 +281,7 @@ async function handleLocalNotification(applicationData) {
 ■ 연락처: ${applicationData.phone}
 ■ 동/호수: ${applicationData.name}
 ■ 현재 통신사: ${applicationData.work_type_display}
-■ 희망일: ${applicationData.start_date || '미지정'}
+■ 희망일: ${applicationData.startDate || '미지정'}
 ■ 상세내용: ${applicationData.description || '없음'}
 ■ 접수일시: ${formattedDate}
 
@@ -341,7 +341,7 @@ async function saveApplicationToSupabase(applicationData) {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
             work_type: applicationData.workType,
-            start_date: applicationData.startDate || null,
+            startDate: applicationData.startDate || null,
             description: applicationData.description || null,
             submitted_at: applicationData.submittedAt
         };
@@ -462,7 +462,7 @@ async function sendEmailToAdmins(applicationData) {
                     name: applicationData.name,
                     phone: applicationData.phone,
                     work_type_display: applicationData.work_type_display,
-                    start_date: applicationData.start_date || '미지정',
+                    start_date: applicationData.startDate || '미지정',
                     description: applicationData.description || '특별한 요청사항 없음',
                     submittedAt: formattedDate
                 };
@@ -611,7 +611,7 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                         name: applicationData.name,
                         phone: applicationData.phone,
                         work_type: applicationData.work_type_display,
-                        start_date: applicationData.start_date || '미지정',
+                        start_date: applicationData.startDate || '미지정',
                         description: applicationData.description || '없음',
                         submitted_at: new Date(applicationData.submitted_at).toLocaleString('ko-KR')
                     }
@@ -676,7 +676,7 @@ async function sendNotificationsToAdmins(applicationData) {
 ■ 연락처: ${applicationData.phone}
 ■ 동/호수: ${applicationData.name}
 ■ 현재 통신사: ${applicationData.work_type_display}
-■ 희망일: ${applicationData.start_date || '미지정'}
+■ 희망일: ${applicationData.startDate || '미지정'}
 ■ 상세내용: ${applicationData.description || '없음'}
 ■ 접수일시: ${formattedDate}
 
