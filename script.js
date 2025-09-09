@@ -226,7 +226,7 @@ async function saveApplicationLocally(applicationData) {
             id: applicationNumber, // 로컬 ID로 사용
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
-            work_type: applicationData.workType,
+            workType: applicationData.workType, // Supabase 컬럼명과 일치
             work_type_display: providerNames[applicationData.workType] || applicationData.workType,
             startDate: applicationData.startDate || null,
             description: applicationData.description || null,
@@ -340,7 +340,7 @@ async function saveApplicationToSupabase(applicationData) {
         const applicationRecord = {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
-            work_type: applicationData.workType,
+            workType: applicationData.workType, // Supabase 컬럼명 맞춤
             startDate: applicationData.startDate // 필수 입력이므로 항상 존재
         };
 
