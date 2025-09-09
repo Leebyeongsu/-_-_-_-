@@ -80,8 +80,18 @@ async function initializeEmailJS() {
             return;
         }
 
-    // 초기화 시작
-    initializeWithRetry();
+        // 초기화 시작
+        initializeWithRetry();
+    });
+}
+
+// 페이지 로드시 초기화 시도
+window.addEventListener('load', () => {
+    initializeEmailJS().catch(error => {
+        console.warn('EmailJS 초기화 실패:', error.message);
+    });
+});
+
 // 온라인 상태가 되면 재시도
 window.addEventListener('online', () => {
     if (!emailJSInitialized) {
@@ -229,12 +239,11 @@ function loadAdminSettingsLocal() {
 // 로컬 저장 백업 (Supabase 실패 시)
 async function saveApplicationLocally(applicationData) {
     try {
-    // 신청번호 생성: LOCAL-YYYYMMDDHHmm
-    const today = new Date();
-    const dateOnly = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const hh = String(today.getHours()).padStart(2, '0');
-    const mm = String(today.getMinutes()).padStart(2, '0');
-    const applicationNumber = `LOCAL-${dateOnly}${hh}${mm}`;
+        // 신청번호 생성
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const applicationNumber = `LOCAL-${dateStr}-${randomNum}`;
 
         // 통신사 이름 변환
         const providerNames = {
@@ -253,7 +262,7 @@ async function saveApplicationLocally(applicationData) {
             startDate: applicationData.startDate || null,
             description: applicationData.description || null,
             privacy: true, // 개인정보 동의
-            submittedAt: applicationData.submittedAt || new Date().toISOString(),
+            submitted_at: applicationData.submittedAt,
             status: 'local_backup' // 로컬 백업 표시
         };
 
@@ -287,7 +296,7 @@ async function handleLocalNotification(applicationData) {
         const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
         const savedPhones = JSON.parse(localStorage.getItem('savedPhoneNumbers') || '[]');
 
-    const submittedDate = new Date(applicationData.submittedAt);
+        const submittedDate = new Date(applicationData.submitted_at);
         const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
             year: 'numeric',
             month: 'long',
@@ -346,12 +355,11 @@ async function saveApplicationToSupabase(applicationData) {
             return await saveApplicationLocally(applicationData);
         }
 
-    // 신청번호 생성: YYYYMMDDHHmm (년월일시분)
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const applicationNumber = `${dateStr}${hh}${mm}`;
+        // 신청번호 생성 (현재 날짜 + 랜덤 4자리)
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const applicationNumber = `APP-${dateStr}-${randomNum}`;
 
         // 통신사 이름 변환
         const providerNames = {
@@ -363,13 +371,12 @@ async function saveApplicationToSupabase(applicationData) {
 
         // 안전한 방식: 확실한 필드만 먼저 저장
         const applicationRecord = {
-            application_number: applicationNumber,
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone // 연락처
         };
 
         // 선택적 컬럼들을 하나씩 안전하게 추가
-    if (applicationData.workType) {
+        if (applicationData.workType) {
             applicationRecord.workType = applicationData.workType;
         }
         if (applicationData.startDate) {
@@ -379,11 +386,11 @@ async function saveApplicationToSupabase(applicationData) {
             applicationRecord.description = applicationData.description;
         }
         
-    // privacy는 마지막에 추가 (개인정보 동의 체크 시에만 제출 가능)
-    applicationRecord.privacy = true;
+        // privacy는 마지막에 추가 (개인정보 동의 체크 시에만 제출 가능)
+        applicationRecord.privacy = true;
         
-    // 제출일시 저장
-    applicationRecord.submittedAt = applicationData.submittedAt || new Date().toISOString();
+        // submitted_at 컬럼이 없으므로 제거
+        // 대신 created_at이나 timestamp 컬럼이 있다면 사용
 
         console.log('🔍 Supabase에 신청서 저장 시도 - 상세 정보:', {
             timestamp: new Date().toISOString(),
@@ -517,7 +524,7 @@ async function sendEmailToAdmins(applicationData) {
         }
 
         // 제출일시 포맷팅
-    const submittedDate = new Date(applicationData.submittedAt);
+        const submittedDate = new Date(applicationData.submitted_at);
         const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
             year: 'numeric',
             month: 'long',
@@ -725,7 +732,7 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                         work_type: applicationData.work_type_display,
                         start_date: applicationData.startDate || '미지정',
                         description: applicationData.description || '없음',
-                        submittedAt: new Date(applicationData.submittedAt).toLocaleString('ko-KR')
+                        submitted_at: new Date(applicationData.submitted_at).toLocaleString('ko-KR')
                     }
                 );
                 if (typeof logEmailAttempt === 'function') {
@@ -784,7 +791,7 @@ async function sendNotificationsToAdmins(applicationData) {
         
         // Supabase 알림 로그 저장 (있는 경우)
         if (supabase && applicationData.id) {
-            const submittedDate = new Date(applicationData.submittedAt);
+            const submittedDate = new Date(applicationData.submitted_at);
             const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
                 year: 'numeric',
                 month: 'long',
@@ -911,10 +918,9 @@ async function processCustomerFormSubmission(event) {
         
         if (savedApplication) {
             // 이메일 발송 여부에 따른 메시지 생성
-            const appNum = savedApplication.application_number || savedApplication.id || savedApplication.id;
-            let successMessage = `✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${appNum}`;
-
-            if (savedApplication.email_sent) {
+            let successMessage = `✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${savedApplication.id}`;
+            
+            if (savedApplication.email_sent || savedApplication.id) {
                 successMessage += '\n✉️ 관리자에게 이메일로 자동 전달되었습니다.';
             } else {
                 successMessage += '\n📋 신청서가 저장되었으며, 관리자가 확인할 예정입니다.';
@@ -1449,20 +1455,18 @@ function showResult(applicationData = null) {
     const resultContent = document.getElementById('resultContent');
     
     if (applicationData) {
-    const submittedAt = applicationData.submittedAt || new Date().toISOString();
-        const formattedDate = new Date(submittedAt).toLocaleDateString('ko-KR', {
+        const formattedDate = new Date(applicationData.submitted_at).toLocaleDateString('ko-KR', {
             year: 'numeric',
             month: 'long', 
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
         });
-        const displayAppNumber = applicationData.application_number || applicationData.id || applicationData.id;
-
+        
         resultContent.innerHTML = `
             <div class="result-info">
                 <h3>📋 접수 완료</h3>
-                <p><strong>신청번호:</strong> ${displayAppNumber}</p>
+                <p><strong>신청번호:</strong> ${applicationData.id}</p>
                 <p><strong>신청자:</strong> ${applicationData.name}</p>
                 <p><strong>연락처:</strong> ${applicationData.phone}</p>
                 <p><strong>접수일시:</strong> ${formattedDate}</p>

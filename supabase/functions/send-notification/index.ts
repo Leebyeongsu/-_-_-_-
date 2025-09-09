@@ -75,7 +75,7 @@ serve(async (req) => {
     }
 
     // 4. 이메일 템플릿 생성
-  const submittedDate = new Date(application.submittedAt)
+    const submittedDate = new Date(application.submitted_at)
     const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
