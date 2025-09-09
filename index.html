@@ -218,8 +218,8 @@
     <!-- Eruda 개발자 도구 (디버깅용) -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
-        // URL에 debug=true가 있을 때만 개발자 도구 활성화
-        if(location.search.indexOf('debug=true') > -1) {
+        // URL에 debug=true 또는 #eruda가 있을 때 개발자 도구 활성화
+        if(location.search.indexOf('debug=true') > -1 || location.hash.indexOf('eruda') > -1) {
             eruda.init();
             console.log('🔍 모바일 디버그 모드가 활성화되었습니다.');
             
