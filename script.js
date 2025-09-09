@@ -757,6 +757,15 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                 const emailAppNum = applicationData.application_number || `${yy}${mm}${dd}${hh2}${min2}`;
                 const formattedForEmail = _d.toLocaleString('ko-KR');
 
+                // work_type_display가 없을 경우 안전한 폴백을 계산
+                const providerNamesFallback = {
+                    'interior': 'KT',
+                    'exterior': 'SKT',
+                    'plumbing': 'LGU+',
+                    'electrical': '기타(지역방송)'
+                };
+                const resolvedWorkTypeDisplay = applicationData.work_type_display || providerNamesFallback[applicationData.workType] || applicationData.workType || '미상';
+
                 const result = await emailjs.send(
                     'service_v90gm26',
                     'template_pxi385c',
@@ -765,7 +774,7 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                         application_number: emailAppNum,
                         name: applicationData.name,
                         phone: applicationData.phone,
-                        work_type: applicationData.work_type_display,
+                        work_type: resolvedWorkTypeDisplay,
                         start_date: applicationData.startDate || '미지정',
                         description: applicationData.description || '없음',
                         submitted_at: formattedForEmail,
