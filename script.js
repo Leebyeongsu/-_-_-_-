@@ -592,13 +592,23 @@ async function sendEmailToAdmins(applicationData) {
                 const min = pad2(_submittedDate.getMinutes());
                 const emailAppNumber = applicationData.application_number || `${y}${m}${d}${hh}${min}`;
 
+                // work_type_display가 없을 경우 안전한 폴백을 계산
+                const providerNamesFallback_local = {
+                    'interior': 'KT',
+                    'exterior': 'SKT', 
+                    'plumbing': 'LGU+',
+                    'electrical': '기타(지역방송)'
+                };
+                const resolvedWorkTypeDisplay_local = applicationData.work_type_display || providerNamesFallback_local[applicationData.workType] || applicationData.workType || '미상';
+
                 const templateParams = {
                     to_email: adminEmail,
                     apartment_name: '구포현대아파트',
                     application_number: emailAppNumber,
                     name: applicationData.name,
                     phone: applicationData.phone,
-                    work_type_display: applicationData.work_type_display,
+                    // 템플릿에서는 {{work_type_display}}를 사용하므로 이 키로 항상 전송
+                    work_type_display: resolvedWorkTypeDisplay_local,
                     start_date: applicationData.startDate || '미지정',
                     description: applicationData.description || '특별한 요청사항 없음',
                     // 템플릿에서 어느 키를 사용하는지 다를 수 있어 안전하게 둘 다 보냄
