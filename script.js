@@ -1594,6 +1594,20 @@ document.addEventListener('DOMContentLoaded', function() {
         displaySavedInputs();
     }
 
+    // 관리자 버튼이 onclick 속성으로 동작하지 않을 수 있어 안전하게 이벤트 리스너를 추가
+    try {
+        const emailBtns = document.querySelectorAll('.email-btn');
+        emailBtns.forEach(b => b.addEventListener('click', showEmailInputModal));
+
+        const smsBtns = document.querySelectorAll('.sms-btn');
+        smsBtns.forEach(b => b.addEventListener('click', showPhoneInputModal));
+
+        const titleEl = document.getElementById('mainTitle');
+        if (titleEl) titleEl.addEventListener('click', editTitle);
+    } catch (e) {
+        console.warn('관리자 버튼 이벤트 리스너 추가 중 예외:', e);
+    }
+
     // Supabase에서 관리자 설정 로드 시도
     loadAdminSettingsFromCloud();
 
