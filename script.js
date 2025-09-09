@@ -340,11 +340,19 @@ async function saveApplicationToSupabase(applicationData) {
         const applicationRecord = {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
-            work_type: applicationData.workType,
-            startDate: applicationData.startDate || null,
-            description: applicationData.description || null,
-            submitted_at: applicationData.submittedAt
+            work_type: applicationData.workType
         };
+
+        // 선택적 컬럼들 (테이블에 있는 경우만 추가)
+        if (applicationData.startDate) {
+            applicationRecord.startDate = applicationData.startDate;
+        }
+        if (applicationData.description) {
+            applicationRecord.description = applicationData.description;
+        }
+        
+        // submitted_at 컬럼이 없으므로 제거
+        // 대신 created_at이나 timestamp 컬럼이 있다면 사용
 
         console.log('Supabase에 신청서 저장 시도:', applicationRecord);
 
