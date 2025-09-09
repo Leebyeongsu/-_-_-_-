@@ -105,6 +105,37 @@ let formData = {};
 let currentQRDataURL = null;
 let adminSettings = null; // 관리자 설정 캐시
 
+// 안전한 logEmailAttempt 전역 래퍼 (notification-service 모듈이 로드되지 않은 환경 방어)
+if (typeof window !== 'undefined' && typeof window.logEmailAttempt !== 'function') {
+    window.logEmailAttempt = async function(applicationId, provider, status, error = null) {
+        try {
+            // Supabase가 있으면 저장 시도
+            if (typeof supabase !== 'undefined' && supabase) {
+                try {
+                    await supabase.from('notification_logs').insert([{
+                        application_id: applicationId,
+                        provider: provider,
+                        status: status,
+                        error: error,
+                        timestamp: new Date().toISOString()
+                    }]);
+                    console.log('logEmailAttempt: Supabase에 로그 저장 완료');
+                    return true;
+                } catch (e) {
+                    console.warn('logEmailAttempt: Supabase 저장 실패(무시):', e);
+                }
+            }
+
+            // 최후의 수단: 콘솔에 로그 출력
+            console.log('logEmailAttempt(Fallback):', { applicationId, provider, status, error, timestamp: new Date().toISOString() });
+            return true;
+        } catch (e) {
+            console.warn('logEmailAttempt 예외(무시):', e);
+            return false;
+        }
+    };
+}
+
 // 관리자 설정 저장 (Supabase)
 async function saveAdminSettingsToCloud() {
     try {
@@ -403,6 +434,52 @@ async function saveApplicationToSupabase(applicationData) {
     }
 }
 
+// 이메일 발송 로그 관리
+async function logEmailAttempt(applicationId, provider, status, error = null) {
+    try {
+        console.log(`📋 이메일 발송 로그:`, {
+            applicationId,
+            provider,
+            status,
+            error,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Supabase 로그 저장 (선택사항)
+        if (supabase) {
+            await supabase.from('notification_logs').insert([{
+                application_id: applicationId,
+                provider: provider,
+                status: status,
+                error: error,
+                timestamp: new Date().toISOString()
+            }]);
+        }
+    } catch (err) {
+        console.warn('로그 저장 실패:', err);
+    }
+}
+
+// SendGrid 백업 발송 함수 (임시 구현)
+async function sendViaSendGrid(applicationData) {
+    try {
+        console.log('📨 SendGrid 백업 발송 시도 (현재 미구현)');
+        console.log('📧 대신 로컬 백업으로 처리합니다.');
+        
+        // 실제 SendGrid 구현이 없으므로 로컬 백업 방식 사용
+        return {
+            success: false,
+            message: 'SendGrid 미구현 - 로컬 백업 사용'
+        };
+    } catch (error) {
+        console.error('SendGrid 백업 발송 실패:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
 // 관리자에게 실제 이메일 발송 (강화된 오류 처리)
 async function sendEmailToAdmins(applicationData) {
     try {
@@ -462,18 +539,31 @@ async function sendEmailToAdmins(applicationData) {
         // 각 관리자 이메일로 EmailJS 발송
         console.log('📧 EmailJS로 관리자에게 이메일 발송을 시도합니다.');
         
-        // 브라우저 알림 권한 요청
-        if ('Notification' in window) {
-            if (Notification.permission === 'default') {
-                await Notification.requestPermission();
+        // 브라우저 알림 권한 요청 (모바일에서 Notification 생성이 에러를 던지는 브라우저가 있어 방어적으로 래핑)
+        try {
+            if (typeof window !== 'undefined' && 'Notification' in window && typeof Notification === 'function') {
+                if (Notification.permission === 'default') {
+                    try {
+                        await Notification.requestPermission();
+                    } catch (permErr) {
+                        console.warn('Notification 권한 요청 중 오류:', permErr);
+                    }
+                }
+
+                if (Notification.permission === 'granted') {
+                    try {
+                        new Notification('🏢 새로운 신청서 접수', {
+                            body: `신청자: ${applicationData.name}\n연락처: ${applicationData.phone}\n동/호수: ${applicationData.name}`,
+                            icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDRIM0MxLjg5IDQgMS4wMSA0Ljg5IDEuMDEgNkwxIDE4QzEgMTkuMTEgMS44OSAyMCAzIDIwSDIwQzIxLjExIDIwIDIyIDE5LjExIDIyIDE4VjZDMjIgNC44OSAyMS4xMSA0IDIwIDRaTTIwIDhMMTEuNSAxMy41TDMgOFY2TDExLjUgMTEuNUwyMCA2VjhaIiBmaWxsPSIjNENBRjUwIi8+Cjwvc3ZnPgo='
+                        });
+                    } catch (notificationErr) {
+                        // 일부 모바일 브라우저(특히 Eruda 내장 환경)에서 Illegal constructor 오류 발생 -> 무시
+                        console.warn('Notification 생성 불가(무시):', notificationErr && notificationErr.message ? notificationErr.message : notificationErr);
+                    }
+                }
             }
-            
-            if (Notification.permission === 'granted') {
-                new Notification('🏢 새로운 신청서 접수', {
-                    body: `신청자: ${applicationData.name}\n연락처: ${applicationData.phone}\n동/호수: ${applicationData.name}`,
-                    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDRIM0MxLjg5IDQgMS4wMSA0Ljg5IDEuMDEgNkwxIDE4QzEgMTkuMTEgMS44OSAyMCAzIDIwSDIwQzIxLjExIDIwIDIyIDE5LjExIDIyIDE4VjZDMjIgNC44OSAyMS4xMSA0IDIwIDRaTTIwIDhMMTEuNSAxMy41TDMgOFY2TDExLjUgMTEuNUwyMCA2VjhaIiBmaWxsPSIjNENBRjUwIi8+Cjwvc3ZnPgo='
-                });
-            }
+        } catch (e) {
+            console.warn('Notification 처리 중 예외 발생(무시):', e && e.message ? e.message : e);
         }
 
         // 실제 EmailJS로 이메일 발송
@@ -589,14 +679,16 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                 console.log('✅ EmailJS 초기화 성공');
             } catch (initError) {
                 console.error('❌ EmailJS 초기화 실패:', initError);
-                console.warn('🚫 SendGrid로 대체합니다.');
-                return await sendViaSendGrid(applicationData);
+                console.warn('🚫 EmailJS 초기화 실패 — 로컬 알림으로 폴백합니다.');
+                await handleLocalNotification(applicationData);
+                return { success: false, error: 'EmailJS 초기화 실패 - 로컬 폴백' };
             }
         }
 
         if (!emailjs) {
-            console.warn('🚫 EmailJS 사용 불가, SendGrid로 대체합니다.');
-            return await sendViaSendGrid(applicationData);
+            console.warn('🚫 EmailJS 사용 불가 — 로컬 알림으로 폴백합니다.');
+            await handleLocalNotification(applicationData);
+            return { success: false, error: 'EmailJS 라이브러리 없음 - 로컬 폴백' };
         }
 
         console.log('📨 이메일 발송 시작');
@@ -643,10 +735,14 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                         submitted_at: new Date(applicationData.submitted_at).toLocaleString('ko-KR')
                     }
                 );
-                await logEmailAttempt(applicationData.id, 'emailjs', 'sent');
+                if (typeof logEmailAttempt === 'function') {
+                    try { await logEmailAttempt(applicationData.id, 'emailjs', 'sent'); } catch(e){ console.warn('logEmailAttempt 실패(무시):', e); }
+                }
                 return { email, success: true, result };
             } catch (error) {
-                await logEmailAttempt(applicationData.id, 'emailjs', 'failed', error.message);
+                if (typeof logEmailAttempt === 'function') {
+                    try { await logEmailAttempt(applicationData.id, 'emailjs', 'failed', error.message); } catch(e){ console.warn('logEmailAttempt 실패(무시):', e); }
+                }
                 return { email, success: false, error };
             }
         }));
@@ -655,10 +751,18 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
         const successfulSends = results.filter(r => r.success).length;
         const totalAttempts = results.length;
 
-        // 모든 이메일 발송이 실패한 경우 SendGrid로 폴백
+        // 모든 이메일 발송이 실패한 경우 로컬 알림으로 폴백
         if (successfulSends === 0) {
-            console.warn('⚠️ EmailJS 발송 실패. SendGrid로 대체 시도...');
-            return await sendViaSendGrid(applicationData);
+            console.warn('⚠️ EmailJS 발송 실패. 로컬 알림으로 대체...');
+            
+            // 로컬 알림 처리 (SendGrid 대신)
+            const localNotification = await handleLocalNotification(applicationData);
+            return {
+                success: localNotification,
+                sent: 0,
+                total: totalAttempts,
+                fallback: 'local_notification'
+            };
         }
 
         return {
@@ -669,8 +773,9 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
 
     } catch (error) {
         console.error('💥 EmailJS 발송 중 오류:', error);
-        console.log('� SendGrid로 대체 시도...');
-        return await sendViaSendGrid(applicationData);
+        console.warn('EmailJS 발송 오류 — 로컬 알림으로 폴백합니다.');
+        await handleLocalNotification(applicationData);
+        return { success: false, error: error.message };
     }
 }
 
