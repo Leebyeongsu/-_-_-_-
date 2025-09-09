@@ -571,17 +571,41 @@ async function sendEmailToAdmins(applicationData) {
             try {
                 console.log(`📧 ${adminEmail}로 EmailJS 이메일 발송 시도...`);
 
-                // EmailJS 템플릿 파라미터
+                // EmailJS 템플릿 파라미터 (이메일 전용: 신청번호을 YYYYMMDDHHmm으로 전달하고, 제출일시 라벨을 접수일시로 제공)
+                const _submittedIso = applicationData.submittedAt || applicationData.submitted_at || new Date().toISOString();
+                const _submittedDate = new Date(_submittedIso);
+                const _formattedDate = _submittedDate.toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    weekday: 'long'
+                });
+
+                // YYYYMMDDHHmm 형식으로 신청번호 생성 (이메일용)
+                const pad2 = (n) => n.toString().padStart(2, '0');
+                const y = _submittedDate.getFullYear();
+                const m = pad2(_submittedDate.getMonth() + 1);
+                const d = pad2(_submittedDate.getDate());
+                const hh = pad2(_submittedDate.getHours());
+                const min = pad2(_submittedDate.getMinutes());
+                const emailAppNumber = applicationData.application_number || `${y}${m}${d}${hh}${min}`;
+
                 const templateParams = {
                     to_email: adminEmail,
                     apartment_name: '구포현대아파트',
-                    application_number: applicationData.id || 'ID 생성 중',
+                    application_number: emailAppNumber,
                     name: applicationData.name,
                     phone: applicationData.phone,
                     work_type_display: applicationData.work_type_display,
                     start_date: applicationData.startDate || '미지정',
                     description: applicationData.description || '특별한 요청사항 없음',
-                    submittedAt: formattedDate
+                    // 템플릿에서 어느 키를 사용하는지 다를 수 있어 안전하게 둘 다 보냄
+                    submittedAt: _formattedDate,
+                    submitted_at: _formattedDate,
+                    // 템플릿에서 라벨을 변수로 받아 사용한다면 이 값을 사용하도록 함(없어도 무해)
+                    submission_label: '접수일시:'
                 };
 
                 // EmailJS로 이메일 발송 (강화된 오류 처리)
@@ -721,18 +745,32 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
         // EmailJS로 메일 발송
         const results = await Promise.all(adminCheck.emails.map(async (email) => {
             try {
+                // 이메일용 파라미터 재구성: 신청번호를 YYYYMMDDHHmm으로 전달하고, 제출일시 라벨을 '접수일시:'로 전달
+                const _iso = applicationData.submittedAt || applicationData.submitted_at || new Date().toISOString();
+                const _d = new Date(_iso);
+                const pad = (n) => n.toString().padStart(2, '0');
+                const yy = _d.getFullYear();
+                const mm = pad(_d.getMonth() + 1);
+                const dd = pad(_d.getDate());
+                const hh2 = pad(_d.getHours());
+                const min2 = pad(_d.getMinutes());
+                const emailAppNum = applicationData.application_number || `${yy}${mm}${dd}${hh2}${min2}`;
+                const formattedForEmail = _d.toLocaleString('ko-KR');
+
                 const result = await emailjs.send(
-                    'service_v90gm26',  // EmailJS 서비스 ID
-                    'template_pxi385c',  // EmailJS 템플릿 ID
+                    'service_v90gm26',
+                    'template_pxi385c',
                     {
                         to_email: email,
-                        application_number: applicationData.id || 'APP-GENERATING',
+                        application_number: emailAppNum,
                         name: applicationData.name,
                         phone: applicationData.phone,
                         work_type: applicationData.work_type_display,
                         start_date: applicationData.startDate || '미지정',
                         description: applicationData.description || '없음',
-                        submitted_at: new Date(applicationData.submitted_at).toLocaleString('ko-KR')
+                        submitted_at: formattedForEmail,
+                        submittedAt: formattedForEmail,
+                        submission_label: '접수일시:'
                     }
                 );
                 if (typeof logEmailAttempt === 'function') {
