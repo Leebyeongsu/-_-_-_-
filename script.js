@@ -340,13 +340,11 @@ async function saveApplicationToSupabase(applicationData) {
         const applicationRecord = {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
-            work_type: applicationData.workType
+            work_type: applicationData.workType,
+            startDate: applicationData.startDate || null // 무조건 포함
         };
 
-        // 선택적 컬럼들 (테이블에 있는 경우만 추가)
-        if (applicationData.startDate) {
-            applicationRecord.startDate = applicationData.startDate;
-        }
+        // 선택적 컬럼들 (데이터가 있을 때만 추가)
         if (applicationData.description) {
             applicationRecord.description = applicationData.description;
         }
