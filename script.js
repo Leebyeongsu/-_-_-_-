@@ -341,7 +341,7 @@ async function saveApplicationToSupabase(applicationData) {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
             work_type: applicationData.workType,
-            startDate: applicationData.startDate || null // 무조건 포함
+            startDate: applicationData.startDate // 필수 입력이므로 항상 존재
         };
 
         // 선택적 컬럼들 (데이터가 있을 때만 추가)
@@ -754,8 +754,18 @@ async function processCustomerFormSubmission(event) {
     }
     
     // 유효성 검증
-    if (!applicationData.name || !applicationData.phone) {
-        alert('필수 항목을 모두 입력해주세요.');
+    if (!applicationData.name || !applicationData.phone || !applicationData.startDate) {
+        alert('필수 항목을 모두 입력해주세요.\n(공사요청, 연락처, 공사 희망일)');
+        return;
+    }
+    
+    // 공사 희망일 날짜 검증
+    const selectedDate = new Date(applicationData.startDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 시간 정보 제거
+    
+    if (selectedDate < today) {
+        alert('공사 희망일은 오늘 날짜 이후로 선택해주세요.');
         return;
     }
     
@@ -1474,6 +1484,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (otherWork) otherWork.required = false;
             }
         });
+    }
+    
+    // 공사 희망일 날짜 제한 설정 (오늘 이후만 선택 가능)
+    const startDateInput = document.getElementById('startDate');
+    if (startDateInput) {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // 최소 선택 가능 날짜를 내일로 설정
+        const minDate = tomorrow.toISOString().split('T')[0];
+        startDateInput.setAttribute('min', minDate);
+        
+        console.log('공사 희망일 최소 선택 날짜 설정:', minDate);
     }
     
     // 폼 제출 처리
