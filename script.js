@@ -17,11 +17,11 @@ let emailJSInitialized = false;
 let initializationAttempts = 0;
 const MAX_INIT_ATTEMPTS = 3;
 
-// EmailJS 초기화 함수
+// EmailJS 초기화 함수 (모바일 환경 강화)
 async function initializeEmailJS() {
     return new Promise((resolve, reject) => {
         // 이미 초기화되었다면 바로 성공 반환
-        if (emailJSInitialized) {
+        if (emailJSInitialized && typeof emailjs !== 'undefined') {
             resolve(true);
             return;
         }
@@ -36,26 +36,38 @@ async function initializeEmailJS() {
 
         const initializeWithRetry = () => {
             try {
+                // EmailJS 스크립트 로드 확인
                 if (typeof emailjs === 'undefined') {
-                    // 스크립트가 아직 로드되지 않은 경우, 재시도 (모바일에서 더 오래 대기)
-                    const waitTime = /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 2000 : 1000;
+                    const waitTime = /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 3000 : 1500;
+                    console.log(`📱 EmailJS 스크립트 로딩 대기... (시도: ${initializationAttempts}/${MAX_INIT_ATTEMPTS}, 대기: ${waitTime}ms)`);
+                    
                     setTimeout(() => {
-                        console.log(`EmailJS 스크립트 로딩 대기 중... (시도: ${initializationAttempts}, 대기시간: ${waitTime}ms)`);
-                        initializeWithRetry();
+                        if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+                            initializeWithRetry();
+                        } else {
+                            reject(new Error('EmailJS 스크립트 로드 시간 초과'));
+                        }
                     }, waitTime);
                     return;
                 }
 
-                // 공개 키 설정
+                // EmailJS 초기화 시도
+                console.log('🔧 EmailJS 초기화 시작...');
                 emailjs.init('8-CeAZsTwQwNl4yE2');
-                console.log('✅ EmailJS 초기화 성공');
-                emailJSInitialized = true;
-                resolve(true);
+                
+                // 초기화 검증
+                if (typeof emailjs.send === 'function') {
+                    console.log('✅ EmailJS 초기화 및 검증 완료');
+                    emailJSInitialized = true;
+                    resolve(true);
+                } else {
+                    throw new Error('EmailJS send 함수를 찾을 수 없습니다');
+                }
             } catch (e) {
-                console.error('❌ EmailJS 초기화 실패:', e);
+                console.error(`❌ EmailJS 초기화 실패 (시도 ${initializationAttempts}):`, e);
                 if (initializationAttempts < MAX_INIT_ATTEMPTS) {
-                    // 실패시 1초 후 재시도
-                    setTimeout(initializeWithRetry, 1000);
+                    const retryWaitTime = 2000;
+                    setTimeout(initializeWithRetry, retryWaitTime);
                 } else {
                     reject(e);
                 }
@@ -212,9 +224,8 @@ async function saveApplicationLocally(applicationData) {
 
         const localApplication = {
             application_number: applicationNumber,
-            name: applicationData.name,
+            name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
-            address: applicationData.name,
             work_type: applicationData.workType,
             work_type_display: providerNames[applicationData.workType] || applicationData.workType,
             start_date: applicationData.startDate || null,
@@ -268,13 +279,21 @@ async function handleLocalNotification(applicationData) {
 ■ 신청번호: ${applicationData.application_number}
 ■ 신청자: ${applicationData.name}
 ■ 연락처: ${applicationData.phone}
-■ 동/호수: ${applicationData.address}
+■ 동/호수: ${applicationData.name}
 ■ 현재 통신사: ${applicationData.work_type_display}
 ■ 희망일: ${applicationData.start_date || '미지정'}
 ■ 상세내용: ${applicationData.description || '없음'}
 ■ 접수일시: ${formattedDate}
 
-※ 이 신청서는 로컬에 저장되었습니다. 네트워크 연결 복구 후 수동으로 관리자에게 전달해주세요.
+⚠️ 네트워크 오류로 로컬에 저장되었습니다.
+
+📞 긴급 연락처: ${savedPhones.length > 0 ? savedPhones[0] : '관리자 연락처 미설정'}
+📧 관리자 이메일: ${savedEmails.length > 0 ? savedEmails[0] : '관리자 이메일 미설정'}
+
+💡 해결방법:
+1. 네트워크 연결을 확인해주세요
+2. WiFi 또는 데이터 연결 상태를 점검해주세요
+3. 위 연락처로 직접 연락주시면 신속히 처리해드립니다
         `;
 
         console.log('=== 관리자 알림 ===');
@@ -320,9 +339,8 @@ async function saveApplicationToSupabase(applicationData) {
 
         const applicationRecord = {
             application_number: applicationNumber,
-            name: applicationData.name,
+            name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
-            address: applicationData.name, // 동/호수 정보
             work_type: applicationData.workType,
             work_type_display: providerNames[applicationData.workType] || applicationData.workType,
             start_date: applicationData.startDate || null,
@@ -409,7 +427,7 @@ async function sendEmailToAdmins(applicationData) {
             
             if (Notification.permission === 'granted') {
                 new Notification('🏢 새로운 신청서 접수', {
-                    body: `신청자: ${applicationData.name}\n연락처: ${applicationData.phone}\n동/호수: ${applicationData.address}`,
+                    body: `신청자: ${applicationData.name}\n연락처: ${applicationData.phone}\n동/호수: ${applicationData.name}`,
                     icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIwIDRIM0MxLjg5IDQgMS4wMSA0Ljg5IDEuMDEgNkwxIDE4QzEgMTkuMTEgMS44OSAyMCAzIDIwSDIwQzIxLjExIDIwIDIyIDE5LjExIDIyIDE4VjZDMjIgNC44OSAyMS4xMSA0IDIwIDRaTTIwIDhMMTEuNSAxMy41TDMgOFY2TDExLjUgMTEuNUwyMCA2VjhaIiBmaWxsPSIjNENBRjUwIi8+Cjwvc3ZnPgo='
                 });
             }
@@ -552,7 +570,6 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                         application_number: applicationData.application_number,
                         name: applicationData.name,
                         phone: applicationData.phone,
-                        address: applicationData.address,
                         work_type: applicationData.work_type_display,
                         start_date: applicationData.start_date || '미지정',
                         description: applicationData.description || '없음',
@@ -617,7 +634,7 @@ async function sendNotificationsToAdmins(applicationData) {
 ■ 신청번호: ${applicationData.application_number}
 ■ 신청자: ${applicationData.name}
 ■ 연락처: ${applicationData.phone}
-■ 동/호수: ${applicationData.address}
+■ 동/호수: ${applicationData.name}
 ■ 현재 통신사: ${applicationData.work_type_display}
 ■ 희망일: ${applicationData.start_date || '미지정'}
 ■ 상세내용: ${applicationData.description || '없음'}
