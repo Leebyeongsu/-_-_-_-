@@ -341,6 +341,7 @@ async function saveApplicationToSupabase(applicationData) {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
             work_type: applicationData.workType,
+            start_date: applicationData.startDate || null,
             description: applicationData.description || null,
             submitted_at: applicationData.submittedAt
         };
