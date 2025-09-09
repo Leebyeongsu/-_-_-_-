@@ -338,23 +338,35 @@ async function saveApplicationToSupabase(applicationData) {
             'electrical': '기타(지역방송)'
         };
 
+        // 안전한 방식: 확실한 필드만 먼저 저장
         const applicationRecord = {
             name: applicationData.name, // 동/호수 정보
-            phone: applicationData.phone,
-            workType: applicationData.workType, // Supabase 컬럼명 맞춤
-            startDate: applicationData.startDate, // 필수 입력이므로 항상 존재
-            privacy: true // 개인정보 동의 (체크된 경우만 제출되므로 항상 true)
+            phone: applicationData.phone // 연락처
         };
 
-        // 선택적 컬럼들 (데이터가 있을 때만 추가)
+        // 선택적 컬럼들을 하나씩 안전하게 추가
+        if (applicationData.workType) {
+            applicationRecord.workType = applicationData.workType;
+        }
+        if (applicationData.startDate) {
+            applicationRecord.startDate = applicationData.startDate;
+        }
         if (applicationData.description) {
             applicationRecord.description = applicationData.description;
         }
         
+        // privacy는 마지막에 추가 (개인정보 동의 체크 시에만 제출 가능)
+        applicationRecord.privacy = true;
+        
         // submitted_at 컬럼이 없으므로 제거
         // 대신 created_at이나 timestamp 컬럼이 있다면 사용
 
-        console.log('Supabase에 신청서 저장 시도:', applicationRecord);
+        console.log('🔍 Supabase에 신청서 저장 시도 - 상세 정보:', {
+            timestamp: new Date().toISOString(),
+            data: applicationRecord,
+            keys: Object.keys(applicationRecord),
+            values: Object.values(applicationRecord)
+        });
 
         // applications 테이블에 신청서 저장
         const { data: insertedApplication, error: insertError } = await supabase
@@ -364,8 +376,15 @@ async function saveApplicationToSupabase(applicationData) {
             .single();
 
         if (insertError) {
-            console.error('Supabase 신청서 저장 오류:', insertError);
-            console.log('로컬 저장으로 대체합니다.');
+            console.error('💥 Supabase 신청서 저장 오류 - 상세 정보:', {
+                error: insertError,
+                code: insertError.code,
+                message: insertError.message,
+                details: insertError.details,
+                hint: insertError.hint,
+                sentData: applicationRecord
+            });
+            console.log('📦 로컬 저장으로 대체합니다.');
             return await saveApplicationLocally(applicationData);
         }
 
