@@ -1455,18 +1455,26 @@ function showResult(applicationData = null) {
     const resultContent = document.getElementById('resultContent');
     
     if (applicationData) {
-        const formattedDate = new Date(applicationData.submitted_at).toLocaleDateString('ko-KR', {
+        // Supabase 컬럼명 submittedAt 우선 사용
+        const submittedIso = applicationData.submittedAt || applicationData.submitted_at || new Date().toISOString();
+        const submittedDate = new Date(submittedIso);
+        const formattedDate = submittedDate.toLocaleDateString('ko-KR', {
             year: 'numeric',
             month: 'long', 
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
         });
-        
+
+        // 신청번호를 년월일시분(YYYYMMDDHHmm) 형식으로 표현 (application_number가 있으면 우선 사용)
+        const appNum = applicationData.application_number || (
+            `${submittedDate.getFullYear()}${String(submittedDate.getMonth()+1).padStart(2,'0')}${String(submittedDate.getDate()).padStart(2,'0')}${String(submittedDate.getHours()).padStart(2,'0')}${String(submittedDate.getMinutes()).padStart(2,'0')}`
+        );
+
         resultContent.innerHTML = `
             <div class="result-info">
                 <h3>📋 접수 완료</h3>
-                <p><strong>신청번호:</strong> ${applicationData.id}</p>
+                <p><strong>신청번호:</strong> ${appNum}</p>
                 <p><strong>신청자:</strong> ${applicationData.name}</p>
                 <p><strong>연락처:</strong> ${applicationData.phone}</p>
                 <p><strong>접수일시:</strong> ${formattedDate}</p>
