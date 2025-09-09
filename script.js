@@ -223,7 +223,7 @@ async function saveApplicationLocally(applicationData) {
         };
 
         const localApplication = {
-            application_number: applicationNumber,
+            id: applicationNumber, // 로컬 ID로 사용
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
             work_type: applicationData.workType,
@@ -276,7 +276,7 @@ async function handleLocalNotification(applicationData) {
         const notificationMessage = `
 [구포현대아파트] 새로운 통신환경개선 신청서 (로컬 백업)
 
-■ 신청번호: ${applicationData.application_number}
+■ 신청번호: ${applicationData.id}
 ■ 신청자: ${applicationData.name}
 ■ 연락처: ${applicationData.phone}
 ■ 동/호수: ${applicationData.name}
@@ -338,11 +338,9 @@ async function saveApplicationToSupabase(applicationData) {
         };
 
         const applicationRecord = {
-            application_number: applicationNumber,
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
             work_type: applicationData.workType,
-            work_type_display: providerNames[applicationData.workType] || applicationData.workType,
             start_date: applicationData.startDate || null,
             description: applicationData.description || null,
             submitted_at: applicationData.submittedAt
@@ -378,7 +376,7 @@ async function saveApplicationToSupabase(applicationData) {
     }
 }
 
-// 관리자에게 실제 이메일 발송
+// 관리자에게 실제 이메일 발송 (강화된 오류 처리)
 async function sendEmailToAdmins(applicationData) {
     try {
         console.log('📧 이메일 발송 시도 - 상세 정보:', {
@@ -387,20 +385,38 @@ async function sendEmailToAdmins(applicationData) {
             deviceType: /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
             emailJSState: {
                 available: typeof emailjs !== 'undefined',
-                initialized: emailJSInitialized
+                initialized: emailJSInitialized,
+                sendFunction: typeof emailjs?.send === 'function'
             }
         });
+        
         // 저장된 관리자 이메일 주소 가져오기
         const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
         
         if (savedEmails.length === 0) {
-            console.warn('저장된 관리자 이메일 주소가 없습니다.');
+            console.warn('⚠️ 저장된 관리자 이메일 주소가 없습니다.');
             return false;
         }
 
+        // EmailJS 완전성 검사
         if (typeof emailjs === 'undefined') {
-            console.warn('EmailJS가 로드되지 않았습니다.');
-            return false;
+            console.error('❌ EmailJS 라이브러리가 로드되지 않았습니다.');
+            throw new Error('EmailJS 라이브러리 로드 실패');
+        }
+
+        if (typeof emailjs.send !== 'function') {
+            console.error('❌ EmailJS send 함수를 사용할 수 없습니다.');
+            throw new Error('EmailJS send 함수 사용 불가');
+        }
+
+        if (!emailJSInitialized) {
+            console.warn('⚠️ EmailJS가 초기화되지 않았습니다. 재초기화 시도...');
+            try {
+                await initializeEmailJS();
+            } catch (initError) {
+                console.error('❌ EmailJS 재초기화 실패:', initError);
+                throw new Error('EmailJS 초기화 실패: ' + initError.message);
+            }
         }
 
         // 제출일시 포맷팅
@@ -442,7 +458,7 @@ async function sendEmailToAdmins(applicationData) {
                 const templateParams = {
                     to_email: adminEmail,
                     apartment_name: '구포현대아파트',
-                    application_number: applicationData.application_number,
+                    application_number: applicationData.id || 'ID 생성 중',
                     name: applicationData.name,
                     phone: applicationData.phone,
                     work_type_display: applicationData.work_type_display,
@@ -451,15 +467,23 @@ async function sendEmailToAdmins(applicationData) {
                     submittedAt: formattedDate
                 };
 
-                // EmailJS로 이메일 발송
-                const response = await emailjs.send(
-                    'service_v90gm26',      // Service ID
-                    'template_pxi385c',     // Template ID  
-                    templateParams
-                );
+                // EmailJS로 이메일 발송 (강화된 오류 처리)
+                console.log('📤 EmailJS 발송 파라미터:', templateParams);
+                
+                const response = await Promise.race([
+                    emailjs.send('service_v90gm26', 'template_pxi385c', templateParams),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('EmailJS 발송 시간 초과 (30초)')), 30000)
+                    )
+                ]);
 
                 console.log(`✅ ${adminEmail}로 이메일 발송 성공:`, response);
                 emailsSent++;
+                
+                // 발송 성공 검증
+                if (response.status !== 200) {
+                    console.warn(`⚠️ ${adminEmail} 발송 응답 상태가 비정상: ${response.status}`);
+                }
 
             } catch (error) {
                 console.error(`❌ ${adminEmail}로 이메일 발송 실패:`, error);
@@ -473,7 +497,23 @@ async function sendEmailToAdmins(applicationData) {
         return emailsSent > 0;
 
     } catch (error) {
-        console.error('이메일 발송 중 전체 오류:', error);
+        console.error('💥 이메일 발송 중 전체 오류:', error);
+        
+        // 모바일 환경에서 친절한 오류 안내
+        if (/Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            console.log(`
+📱 모바일 환경에서 메일 발송 실패 안내:
+
+🔧 해결 방법:
+1. WiFi 또는 데이터 연결 상태 확인
+2. 브라우저 새로고침 후 재시도  
+3. 다른 브라우저(Chrome, Safari)에서 시도
+4. 관리자에게 직접 연락
+
+⚠️ 신청서는 로컬에 안전하게 저장되었습니다.
+            `);
+        }
+        
         return false;
     }
 }
@@ -567,7 +607,7 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                     'template_pxi385c',  // EmailJS 템플릿 ID
                     {
                         to_email: email,
-                        application_number: applicationData.application_number,
+                        application_number: applicationData.id || 'APP-GENERATING',
                         name: applicationData.name,
                         phone: applicationData.phone,
                         work_type: applicationData.work_type_display,
@@ -631,7 +671,7 @@ async function sendNotificationsToAdmins(applicationData) {
             const emailMessage = `
 [구포현대아파트] 새로운 통신환경개선 신청서
 
-■ 신청번호: ${applicationData.application_number}
+■ 신청번호: ${applicationData.id}
 ■ 신청자: ${applicationData.name}
 ■ 연락처: ${applicationData.phone}
 ■ 동/호수: ${applicationData.name}
@@ -736,7 +776,7 @@ async function processCustomerFormSubmission(event) {
         
         if (savedApplication) {
             // 이메일 발송 여부에 따른 메시지 생성
-            let successMessage = `✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${savedApplication.application_number}`;
+            let successMessage = `✅ 신청서가 성공적으로 제출되었습니다!\n신청번호: ${savedApplication.id}`;
             
             if (savedApplication.email_sent || savedApplication.id) {
                 successMessage += '\n✉️ 관리자에게 이메일로 자동 전달되었습니다.';
@@ -1284,7 +1324,7 @@ function showResult(applicationData = null) {
         resultContent.innerHTML = `
             <div class="result-info">
                 <h3>📋 접수 완료</h3>
-                <p><strong>신청번호:</strong> ${applicationData.application_number}</p>
+                <p><strong>신청번호:</strong> ${applicationData.id}</p>
                 <p><strong>신청자:</strong> ${applicationData.name}</p>
                 <p><strong>연락처:</strong> ${applicationData.phone}</p>
                 <p><strong>접수일시:</strong> ${formattedDate}</p>
