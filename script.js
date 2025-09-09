@@ -230,6 +230,7 @@ async function saveApplicationLocally(applicationData) {
             work_type_display: providerNames[applicationData.workType] || applicationData.workType,
             startDate: applicationData.startDate || null,
             description: applicationData.description || null,
+            privacy: true, // 개인정보 동의
             submitted_at: applicationData.submittedAt,
             status: 'local_backup' // 로컬 백업 표시
         };
@@ -341,7 +342,8 @@ async function saveApplicationToSupabase(applicationData) {
             name: applicationData.name, // 동/호수 정보
             phone: applicationData.phone,
             workType: applicationData.workType, // Supabase 컬럼명 맞춤
-            startDate: applicationData.startDate // 필수 입력이므로 항상 존재
+            startDate: applicationData.startDate, // 필수 입력이므로 항상 존재
+            privacy: true // 개인정보 동의 (체크된 경우만 제출되므로 항상 true)
         };
 
         // 선택적 컬럼들 (데이터가 있을 때만 추가)
