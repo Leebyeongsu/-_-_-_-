@@ -37,11 +37,12 @@ async function initializeEmailJS() {
         const initializeWithRetry = () => {
             try {
                 if (typeof emailjs === 'undefined') {
-                    // 스크립트가 아직 로드되지 않은 경우, 재시도
+                    // 스크립트가 아직 로드되지 않은 경우, 재시도 (모바일에서 더 오래 대기)
+                    const waitTime = /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 2000 : 1000;
                     setTimeout(() => {
-                        console.log(`EmailJS 스크립트 로딩 대기 중... (시도: ${initializationAttempts})`);
+                        console.log(`EmailJS 스크립트 로딩 대기 중... (시도: ${initializationAttempts}, 대기시간: ${waitTime}ms)`);
                         initializeWithRetry();
-                    }, 1000);
+                    }, waitTime);
                     return;
                 }
 
@@ -489,13 +490,20 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
         }
 
         // EmailJS 초기화 상태 확인 및 재시도
-        if (!emailJSInitialized) {
+        if (!emailJSInitialized || typeof emailjs === 'undefined') {
             console.log('📨 EmailJS 초기화 시도 중...');
             try {
+                // 모바일에서 더 오래 대기
+                const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                if (isMobile) {
+                    console.log('📱 모바일 환경에서 EmailJS 재초기화 시도...');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                
                 await initializeEmailJS();
                 console.log('✅ EmailJS 초기화 성공');
             } catch (initError) {
-                console.error('� EmailJS 초기화 실패:', initError);
+                console.error('❌ EmailJS 초기화 실패:', initError);
                 console.warn('🚫 SendGrid로 대체합니다.');
                 return await sendViaSendGrid(applicationData);
             }
@@ -537,8 +545,8 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
         const results = await Promise.all(adminCheck.emails.map(async (email) => {
             try {
                 const result = await emailjs.send(
-                    'service_gupo',  // EmailJS 서비스 ID
-                    'template_application',  // EmailJS 템플릿 ID
+                    'service_v90gm26',  // EmailJS 서비스 ID
+                    'template_pxi385c',  // EmailJS 템플릿 ID
                     {
                         to_email: email,
                         application_number: applicationData.application_number,
