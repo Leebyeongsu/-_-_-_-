@@ -1519,7 +1519,7 @@ function showResult(applicationData = null) {
                 <p><strong>처리상태:</strong> 접수 완료 (관리자 검토 중)</p>
                 <div class="notice">
                     <p>💡 관리자가 신청 내용을 검토한 후 연락드릴 예정입니다.</p>
-                    <p>문의사항이 있으시면 등록하신 연락처로 연락주세요.</p>
+                    <p>문의사항이 있으시면 게시판 공사팀 연락처로 연락 주세요.</p>
                 </div>
             </div>
         `;
