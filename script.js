@@ -784,6 +784,8 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
                         application_number: emailAppNum,
                         name: applicationData.name,
                         phone: applicationData.phone,
+                        // 템플릿에서 {{work_type_display}}를 사용하므로 해당 키도 항상 전송
+                        work_type_display: resolvedWorkTypeDisplay,
                         work_type: resolvedWorkTypeDisplay,
                         start_date: applicationData.startDate || '미지정',
                         description: applicationData.description || '없음',
