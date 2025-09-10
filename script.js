@@ -494,9 +494,13 @@ async function sendEmailToAdmins(applicationData) {
             }
         });
         
-        // 저장된 관리자 이메일 주소 가져오기
-        const savedEmails = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
-        
+
+    // 저장된 관리자 이메일 주소 가져오기
+    const savedEmailsRaw = JSON.parse(localStorage.getItem('savedEmailAddresses') || '[]');
+    // 중복 제거, 공백 제거, 최대 3개 제한
+    const savedEmails = Array.from(new Set((savedEmailsRaw || []).map(e => (e || '').toString().trim()))).filter(Boolean).slice(0, 3);
+    console.log('DEBUG sendEmailToAdmins - savedEmailsRaw:', savedEmailsRaw, '=> filtered:', savedEmails);
+
         if (savedEmails.length === 0) {
             console.warn('⚠️ 저장된 관리자 이메일 주소가 없습니다.');
             return false;
@@ -750,10 +754,15 @@ async function sendNotificationsViaEdgeFunction(applicationData) {
             throw new Error('관리자 이메일 설정을 찾을 수 없습니다.');
         }
 
-        console.log('✅ 관리자 이메일 확인됨:', adminCheck.emails);
+        // 관리자 이메일 목록 정리: 중복 제거, 공백 제거, 최대 3개 제한
+        const adminEmails = Array.isArray(adminCheck.emails)
+            ? Array.from(new Set(adminCheck.emails.map(e => (e || '').toString().trim()))).filter(Boolean).slice(0, 3)
+            : [];
+
+    console.log('DEBUG sendNotificationsViaEdgeFunction - adminCheck.emails (raw):', adminCheck.emails, '=> filtered adminEmails:', adminEmails);
 
         // EmailJS로 메일 발송
-        const results = await Promise.all(adminCheck.emails.map(async (email) => {
+        const results = await Promise.all(adminEmails.map(async (email) => {
             try {
                 // 이메일용 파라미터 재구성: 신청번호를 YYYYMMDDHHmm으로 전달하고, 제출일시 라벨을 '접수일시:'로 전달
                 const _iso = applicationData.submittedAt || applicationData.submitted_at || new Date().toISOString();
